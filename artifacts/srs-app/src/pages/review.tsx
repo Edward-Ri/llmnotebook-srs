@@ -147,51 +147,68 @@ export default function Review() {
 
               {/* BACK OF CARD */}
               <UICard className="absolute inset-0 backface-hidden rotate-y-180 bg-card border-primary/20 shadow-2xl flex flex-col overflow-hidden">
-                 <div className="flex-1 p-8 md:p-16 flex flex-col items-center justify-center text-center relative overflow-y-auto">
-                  <div className="absolute top-6 left-6 text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" /> 答案
+                <div className="flex-1 flex flex-col overflow-y-auto">
+                  {/* 1. 问题区域 */}
+                  <div className="px-8 md:px-12 pt-8 pb-4">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
+                      <Brain className="w-4 h-4" /> 问题
+                    </div>
+                    <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+                      {currentCard.frontContent}
+                    </p>
                   </div>
-                  <div className="text-xl md:text-2xl font-medium leading-relaxed text-foreground whitespace-pre-wrap max-w-2xl mx-auto">
-                    {currentCard.backContent}
+
+                  {/* 分隔线 */}
+                  <div className="mx-8 md:mx-12 border-t-2 border-primary/20 my-2" />
+
+                  {/* 2. 答案区域 */}
+                  <div className="px-8 md:px-12 py-4 flex-1">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-2 mb-3">
+                      <CheckCircle2 className="w-4 h-4" /> 答案
+                    </div>
+                    <p className="text-xl md:text-2xl font-semibold leading-relaxed text-foreground whitespace-pre-wrap">
+                      {currentCard.backContent}
+                    </p>
                   </div>
                 </div>
-                
-                <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-border/50">
+
+                {/* 3. 掌握程度评级区域 */}
+                <div className="p-5 bg-muted/40 border-t border-border/50">
                   <div className="max-w-2xl mx-auto">
-                    <p className="text-center text-sm font-semibold text-muted-foreground mb-4">
-                      你对这个答案掌握得如何？
+                    <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                      对该概念的掌握程度
                     </p>
-                    <div className="grid grid-cols-4 gap-3 md:gap-4">
-                      <GradeButton 
-                        grade={0} 
-                        label="完全遗忘" 
-                        sub="重新学习" 
-                        color="destructive" 
-                        onClick={() => handleGrade(0)} 
+                    <div className="grid grid-cols-4 gap-2 md:gap-3">
+                      <GradeButton
+                        grade={0}
+                        label="完全遗忘"
+                        sub="明天再见"
+                        color="destructive"
+                        onClick={() => handleGrade(0)}
                         disabled={logReviewMutation.isPending}
                       />
-                      <GradeButton 
-                        grade={1} 
-                        label="困难" 
-                        sub="较费力" 
-                        color="warning" 
-                        onClick={() => handleGrade(1)} 
+                      <GradeButton
+                        grade={1}
+                        label="困难"
+                        sub="有点印象"
+                        color="warning"
+                        onClick={() => handleGrade(1)}
                         disabled={logReviewMutation.isPending}
                       />
-                      <GradeButton 
-                        grade={2} 
-                        label="一般" 
-                        sub="需要回忆" 
-                        color="blue-500" 
-                        onClick={() => handleGrade(2)} 
+                      <GradeButton
+                        grade={2}
+                        label="一般"
+                        sub="需要思考"
+                        color="blue-500"
+                        onClick={() => handleGrade(2)}
                         disabled={logReviewMutation.isPending}
                       />
-                      <GradeButton 
-                        grade={3} 
-                        label="轻松" 
-                        sub="秒答" 
-                        color="success" 
-                        onClick={() => handleGrade(3)} 
+                      <GradeButton
+                        grade={3}
+                        label="轻松"
+                        sub="脱口而出"
+                        color="success"
+                        onClick={() => handleGrade(3)}
                         disabled={logReviewMutation.isPending}
                       />
                     </div>
