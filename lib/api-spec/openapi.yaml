@@ -1,22 +1,28 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AI辅助学习与间隔重复系统 API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: documents
+    description: Document and keyword operations
+  - name: cards
+    description: Card generation and validation
+  - name: reviews
+    description: Spaced repetition review operations
+  - name: analytics
+    description: Learning analytics
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +30,196 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /documents/analyze:
+    post:
+      operationId: analyzeDocument
+      tags: [documents]
+      summary: 分析文档并提取关键词
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeDocumentRequest"
+      responses:
+        "200":
+          description: 分析结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeDocumentResponse"
+
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: 获取所有文档列表
+      responses:
+        "200":
+          description: 文档列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentListResponse"
+
+  /documents/{documentId}/keywords:
+    get:
+      operationId: getDocumentKeywords
+      tags: [documents]
+      summary: 获取文档关键词
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 关键词列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeywordListResponse"
+    put:
+      operationId: updateKeywordSelections
+      tags: [documents]
+      summary: 更新关键词选择状态
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKeywordsRequest"
+      responses:
+        "200":
+          description: 更新结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeywordListResponse"
+
+  /cards/generate:
+    post:
+      operationId: generateCards
+      tags: [cards]
+      summary: 基于选中关键词生成候选卡片
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateCardsRequest"
+      responses:
+        "200":
+          description: 生成的卡片列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardListResponse"
+
+  /cards/pending:
+    get:
+      operationId: getPendingCards
+      tags: [cards]
+      summary: 获取待校验的卡片
+      parameters:
+        - name: documentId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 待校验卡片列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardListResponse"
+
+  /cards/validate/batch:
+    put:
+      operationId: validateCardsBatch
+      tags: [cards]
+      summary: 批量校验卡片
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateCardsBatchRequest"
+      responses:
+        "200":
+          description: 校验结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchValidationResponse"
+
+  /reviews/due:
+    get:
+      operationId: getDueCards
+      tags: [reviews]
+      summary: 获取今日到期复习卡片
+      responses:
+        "200":
+          description: 到期卡片列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DueCardsResponse"
+
+  /reviews/log:
+    post:
+      operationId: logReview
+      tags: [reviews]
+      summary: 记录复习结果并更新SM-2参数
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogReviewRequest"
+      responses:
+        "200":
+          description: 更新后的卡片
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewLogResponse"
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: 获取学习分析摘要
+      responses:
+        "200":
+          description: 学习分析数据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/heatmap:
+    get:
+      operationId: getHeatmapData
+      tags: [analytics]
+      summary: 获取学习热力图数据
+      responses:
+        "200":
+          description: 热力图数据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeatmapResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +230,285 @@ components:
       required:
         - status
 
+    AnalyzeDocumentRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          description: 原始文本内容
+        title:
+          type: string
+          description: 文档标题
+      required:
+        - content
+
+    AnalyzeDocumentResponse:
+      type: object
+      properties:
+        documentId:
+          type: integer
+        title:
+          type: string
+        keywords:
+          type: array
+          items:
+            $ref: "#/components/schemas/Keyword"
+      required:
+        - documentId
+        - keywords
+
+    Keyword:
+      type: object
+      properties:
+        id:
+          type: integer
+        word:
+          type: string
+        isSelected:
+          type: boolean
+        documentId:
+          type: integer
+      required:
+        - id
+        - word
+        - isSelected
+        - documentId
+
+    KeywordListResponse:
+      type: object
+      properties:
+        keywords:
+          type: array
+          items:
+            $ref: "#/components/schemas/Keyword"
+      required:
+        - keywords
+
+    UpdateKeywordsRequest:
+      type: object
+      properties:
+        selectedIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - selectedIds
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+        keywordCount:
+          type: integer
+        cardCount:
+          type: integer
+      required:
+        - id
+        - title
+        - content
+        - createdAt
+
+    DocumentListResponse:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+      required:
+        - documents
+
+    GenerateCardsRequest:
+      type: object
+      properties:
+        documentId:
+          type: integer
+        keywordIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - documentId
+        - keywordIds
+
+    Card:
+      type: object
+      properties:
+        id:
+          type: integer
+        frontContent:
+          type: string
+        backContent:
+          type: string
+        status:
+          type: string
+          enum: [pending_validation, active, discarded]
+        keywordId:
+          type: integer
+        keyword:
+          type: string
+        sm2Interval:
+          type: integer
+        sm2Repetition:
+          type: integer
+        sm2Efactor:
+          type: number
+        dueDate:
+          type: string
+      required:
+        - id
+        - frontContent
+        - backContent
+        - status
+        - keywordId
+
+    CardListResponse:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Card"
+        total:
+          type: integer
+      required:
+        - cards
+        - total
+
+    CardValidationItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        action:
+          type: string
+          enum: [keep, edit, discard]
+        frontContent:
+          type: string
+        backContent:
+          type: string
+      required:
+        - id
+        - action
+
+    ValidateCardsBatchRequest:
+      type: object
+      properties:
+        validations:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardValidationItem"
+      required:
+        - validations
+
+    BatchValidationResponse:
+      type: object
+      properties:
+        processed:
+          type: integer
+        kept:
+          type: integer
+        discarded:
+          type: integer
+      required:
+        - processed
+        - kept
+        - discarded
+
+    DueCardsResponse:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Card"
+        total:
+          type: integer
+        todayReviewed:
+          type: integer
+      required:
+        - cards
+        - total
+        - todayReviewed
+
+    LogReviewRequest:
+      type: object
+      properties:
+        cardId:
+          type: integer
+        grade:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: "0=完全遗忘, 1=困难, 2=一般, 3=轻松"
+      required:
+        - cardId
+        - grade
+
+    ReviewLogResponse:
+      type: object
+      properties:
+        card:
+          $ref: "#/components/schemas/Card"
+        nextDueDate:
+          type: string
+        newInterval:
+          type: integer
+      required:
+        - card
+        - nextDueDate
+        - newInterval
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalCards:
+          type: integer
+        activeCards:
+          type: integer
+        totalReviews:
+          type: integer
+        todayReviews:
+          type: integer
+        retentionRate:
+          type: number
+        streak:
+          type: integer
+        dueToday:
+          type: integer
+      required:
+        - totalCards
+        - activeCards
+        - totalReviews
+        - todayReviews
+        - retentionRate
+        - streak
+        - dueToday
+
+    HeatmapData:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+      required:
+        - date
+        - count
+
+    HeatmapResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/HeatmapData"
+      required:
+        - data

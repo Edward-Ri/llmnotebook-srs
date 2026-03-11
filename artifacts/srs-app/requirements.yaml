@@ -1,0 +1,16 @@
+packages:
+  "recharts": "Dashboard analytics charts and data visualization"
+  "framer-motion": "Flashcard flipping animations and page transitions"
+  "date-fns": "Human-readable date formatting for heatmap and analytics"
+  "canvas-confetti": "Celebration effects upon completing reviews"
+  "@types/canvas-confetti": "Types for canvas-confetti"
+
+images:
+  - path: "artifacts/srs-app/public/images/hero-bg.png"
+    description: "Abstract soft gradient background in light indigo, slate, and white. Minimalist, clean, professional education vibe. Soft glowing spheres."
+    aspect_ratio: "16:9"
+
+notes:
+  - Using generated hooks from @workspace/api-client-react
+  - wouter for routing
+  - Tailwind v4 for styling
