@@ -31,8 +31,15 @@ export function AuthModal({ open, onClose }: Props) {
           credentials: "include",
           body: JSON.stringify({ email, password }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "登录失败");
+
+        let data: any = null;
+        try {
+          data = await res.json();
+        } catch {
+          // ignore JSON parse errors; handle below via status code
+        }
+
+        if (!res.ok) throw new Error(data?.error || "登录失败");
         window.location.reload();
       }
       setDone(true);
