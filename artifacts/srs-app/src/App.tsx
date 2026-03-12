@@ -19,6 +19,8 @@ import Analyze from "@/pages/analyze";
 import Validate from "@/pages/validate";
 import Review from "@/pages/review";
 import Analytics from "@/pages/analytics";
+import MaterialDetail from "@/pages/material-detail";
+import DeckDetail from "@/pages/deck-detail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -114,6 +116,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/analyze" component={Analyze} />
+      <Route path="/materials/:id" component={MaterialDetail} />
+      <Route path="/decks/:id" component={DeckDetail} />
       <Route path="/validate" component={Validate} />
       <Route path="/review" component={Review} />
       <Route path="/analytics" component={Analytics} />
