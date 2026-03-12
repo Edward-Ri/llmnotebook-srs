@@ -4,6 +4,14 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+## Features
+- AI辅助文档解析 + 关键词提取 (Stage 1-2)
+- HITL双屏卡片校验 (Stage 3)
+- SM-2算法间隔复习 (Stage 4)
+- 学习分析与热力图 (Stage 5)
+- 邮箱注册/登录账号系统（bcrypt + JWT HTTP-only Cookie）
+- 学习数据按用户绑定（documents.user_id FK）
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces

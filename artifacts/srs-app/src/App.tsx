@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
+import { AuthProvider } from "@/contexts/AuthContext";
 import { AppSidebar } from "@/components/app-sidebar";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -42,32 +43,30 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <SidebarProvider style={sidebarStyle}>
-            <div className="flex h-screen w-full bg-background overflow-hidden">
-              <AppSidebar />
-              <div className="flex flex-col flex-1 relative">
-                {/* Mobile Header */}
-                <header className="md:hidden flex items-center p-4 border-b bg-background z-50">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <span className="ml-4 font-bold">AI 记忆引擎</span>
-                </header>
-                
-                {/* Desktop Trigger floating */}
-                <div className="hidden md:block absolute top-4 left-4 z-50">
-                  <SidebarTrigger className="bg-background/80 backdrop-blur shadow-sm" data-testid="button-sidebar-toggle" />
+      <AuthProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <SidebarProvider style={sidebarStyle}>
+              <div className="flex h-screen w-full bg-background overflow-hidden">
+                <AppSidebar />
+                <div className="flex flex-col flex-1 relative">
+                  <header className="md:hidden flex items-center p-4 border-b bg-background z-50">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    <span className="ml-4 font-bold">AI 记忆引擎</span>
+                  </header>
+                  <div className="hidden md:block absolute top-4 left-4 z-50">
+                    <SidebarTrigger className="bg-background/80 backdrop-blur shadow-sm" data-testid="button-sidebar-toggle" />
+                  </div>
+                  <main className="flex-1 overflow-hidden relative">
+                    <Router />
+                  </main>
                 </div>
-
-                <main className="flex-1 overflow-hidden relative">
-                  <Router />
-                </main>
               </div>
-            </div>
-          </SidebarProvider>
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+            </SidebarProvider>
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

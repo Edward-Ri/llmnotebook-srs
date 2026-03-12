@@ -1,9 +1,11 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { usersTable } from "./users";
 
 export const documentsTable = pgTable("documents", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => usersTable.id),
   title: text("title").notNull().default("未命名文档"),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

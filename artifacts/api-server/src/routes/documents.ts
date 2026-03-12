@@ -48,9 +48,11 @@ function extractKeywords(text: string): string[] {
 router.post("/analyze", async (req, res) => {
   const body = AnalyzeDocumentBody.parse(req.body);
   
+  const authUser = (req as any).authUser as { userId: number } | undefined;
   const [doc] = await db.insert(documentsTable).values({
     content: body.content,
     title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
+    userId: authUser?.userId ?? null,
   }).returning();
 
   const keywordWords = extractKeywords(body.content);

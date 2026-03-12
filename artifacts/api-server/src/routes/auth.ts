@@ -1,0 +1,74 @@
+import { Router, type IRouter } from "express";
+import bcrypt from "bcryptjs";
+import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
+import { signToken, verifyToken } from "../middlewares/auth";
+
+const router: IRouter = Router();
+const COOKIE_NAME = "srs_token";
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  secure: process.env.NODE_ENV === "production",
+};
+
+router.post("/register", async (req, res) => {
+  const { email, password } = req.body ?? {};
+
+  if (!email || !password) {
+    return res.status(400).json({ error: "邮箱和密码不能为空" });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "邮箱格式不正确" });
+  }
+  if ((password as string).length < 6) {
+    return res.status(400).json({ error: "密码至少需要 6 位" });
+  }
+
+  const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  if (existing.length > 0) {
+    return res.status(409).json({ error: "该邮箱已被注册" });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const [user] = await db.insert(usersTable).values({ email, passwordHash }).returning();
+
+  const token = signToken({ userId: user.id, email: user.email });
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
+
+  return res.json({ user: { id: user.id, email: user.email } });
+});
+
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body ?? {};
+  if (!email || !password) {
+    return res.status(400).json({ error: "邮箱和密码不能为空" });
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  if (!user) return res.status(401).json({ error: "邮箱或密码错误" });
+
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) return res.status(401).json({ error: "邮箱或密码错误" });
+
+  const token = signToken({ userId: user.id, email: user.email });
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
+  return res.json({ user: { id: user.id, email: user.email } });
+});
+
+router.get("/me", (req, res) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.status(401).json({ error: "未登录" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "会话已过期，请重新登录" });
+  return res.json({ user: { id: payload.userId, email: payload.email } });
+});
+
+router.post("/logout", (_req, res) => {
+  res.clearCookie(COOKIE_NAME);
+  return res.json({ ok: true });
+});
+
+export default router;
