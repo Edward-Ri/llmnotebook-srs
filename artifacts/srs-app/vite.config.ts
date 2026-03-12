@@ -6,13 +6,9 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const rawPort = process.env.PORT;
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
+// In local development, it is common not to set PORT for the frontend dev server.
+// Default to 5173 (Vite default) and allow overriding via PORT.
+const port = rawPort ? Number(rawPort) : 5173;
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
@@ -20,14 +16,16 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH;
 
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+// Default to root in local development. In production/replit, BASE_PATH can be set.
+const resolvedBasePath = basePath && basePath.trim().length > 0 ? basePath : "/";
+
+// Backend API base URL for local dev proxy.
+const apiTarget = process.env.API_TARGET && process.env.API_TARGET.trim().length > 0
+  ? process.env.API_TARGET
+  : "http://localhost:3000";
 
 export default defineConfig({
-  base: basePath,
+  base: resolvedBasePath,
   plugins: [
     react(),
     tailwindcss(),
@@ -61,6 +59,12 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: {
+      "/api": {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],
