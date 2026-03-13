@@ -36,7 +36,22 @@ CREATE TABLE IF NOT EXISTS text_blocks (
   UNIQUE (document_id, position_index)
 );
 
+-- sections: hierarchical sections per document, spanning ranges of text_blocks
+CREATE TABLE IF NOT EXISTS sections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  parent_section_id UUID NULL REFERENCES sections(id) ON DELETE SET NULL,
+  heading VARCHAR(255),
+  start_block_index INT NOT NULL,
+  end_block_index INT NOT NULL,
+  level INT NOT NULL
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_text_blocks_document_id ON text_blocks (document_id);
 CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents (created_at);
+CREATE INDEX IF NOT EXISTS idx_sections_document_id ON sections (document_id);
+CREATE INDEX IF NOT EXISTS idx_sections_parent_section_id ON sections (parent_section_id);
+CREATE INDEX IF NOT EXISTS idx_sections_start_block_index ON sections (start_block_index);
+CREATE INDEX IF NOT EXISTS idx_sections_end_block_index ON sections (end_block_index);
 
