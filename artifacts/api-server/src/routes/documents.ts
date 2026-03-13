@@ -1,6 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { documentsTable, keywordsTable, cardsTable } from "@workspace/db/schema";
+import {
+  documentsTable,
+  keywordsTable,
+  cardsTable,
+  textBlocksTable,
+  sectionsTable,
+} from "@workspace/db/schema";
 import { eq, count } from "drizzle-orm";
 import {
   AnalyzeDocumentBody,
@@ -11,44 +17,23 @@ import {
   physicalChunk,
   segmentSections,
 } from "../utils/physicalChunking";
-import { attachKeywordsToToc } from "../utils/toc-keywords";
+import { deepseekChat, type ChatMessage } from "../services/llm";
 
 const router: IRouter = Router();
 
-function extractKeywords(text: string): string[] {
-  const stopWords = new Set([
-    "的","了","在","是","我","有","和","就","不","人","都","一","一个","上","也","很","到","说","要","去","你","会","着","没有",
-    "看","好","自己","这","那","们","来","用","她","他","它","这个","那个","但","与","或","以","对","于","中","为","从","所",
-    "其","而","如","则","之","把","被","让","使","将","后","前","中","下","内","外","产","形","问","第","可","还","只","时",
-    "又","因","如果","但是","所以","因为","虽然","不过","而且","然后","这样","这些","那些","可以","已经","应该","需要","通过","根据",
-    "the","a","an","of","in","to","for","is","are","was","were","be","been","being","have","has","had","do","does","did",
-    "and","or","but","not","this","that","these","those","with","from","by","at","on","as","it","its","they","them","their",
-    "we","our","you","your","he","his","she","her","will","would","can","could","may","might","shall","should","must","into"
-  ]);
+type LlmKeyword = { word: string; reason?: string; score?: number };
 
-  const words: Map<string, number> = new Map();
-  
-  const chineseMatches = text.match(/[\u4e00-\u9fa5]{2,8}/g) || [];
-  for (const word of chineseMatches) {
-    if (!stopWords.has(word)) {
-      words.set(word, (words.get(word) || 0) + 1);
-    }
+function parseKeywordJson(raw: string): LlmKeyword[] {
+  const trimmed = raw.trim();
+  const start = trimmed.indexOf("[");
+  const end = trimmed.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) return [];
+  try {
+    const json = JSON.parse(trimmed.slice(start, end + 1));
+    return Array.isArray(json) ? json : [];
+  } catch {
+    return [];
   }
-
-  const englishMatches = text.match(/\b[A-Za-z][a-z]{2,}\b/g) || [];
-  for (const word of englishMatches) {
-    const lower = word.toLowerCase();
-    if (!stopWords.has(lower) && lower.length > 3) {
-      words.set(word, (words.get(word) || 0) + 1);
-    }
-  }
-
-  const sorted = Array.from(words.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 30)
-    .map(([w]) => w);
-
-  return sorted;
 }
 
 router.post("/analyze", async (req, res) => {
@@ -64,17 +49,85 @@ router.post("/analyze", async (req, res) => {
     userId: authUser?.userId ?? null,
   }).returning();
 
-  const keywordWords = extractKeywords(body.content);
+  if (paragraphs.length > 0) {
+    await db.insert(textBlocksTable).values(
+      paragraphs.map((block) => ({
+        documentId: doc.id,
+        content: block.content,
+        positionIndex: block.index,
+      })),
+    );
+  }
+
+  if (sections.length > 0) {
+    await db.insert(sectionsTable).values(
+      sections.map((section) => ({
+        documentId: doc.id,
+        parentSectionId: null,
+        heading: null,
+        startBlockIndex: section.startIndex,
+        endBlockIndex: section.endIndex,
+        level: 1,
+      })),
+    );
+  }
+
+  const sectionKeywords: { sectionIndex: number; word: string }[] = [];
+
+  for (const section of sections) {
+    const sectionBlocks = paragraphs
+      .slice(section.startIndex, section.endIndex + 1)
+      .map((block) => block.content);
+
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content:
+          "你是知识提取专家。请根据给定标题与文本块，输出严格的 JSON 数组，" +
+          "每项包含 {\"word\":\"词汇\",\"reason\":\"提取理由\",\"score\":1-5}。" +
+          "仅输出 JSON，不要多余文本。",
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          title: doc.title,
+          blocks: sectionBlocks,
+        }),
+      },
+    ];
+
+    const raw = await deepseekChat(messages, { temperature: 0.2 });
+    const parsed = parseKeywordJson(raw)
+      .filter((item) => Number(item.score ?? 0) >= 3)
+      .map((item) => item.word)
+      .filter((word) => typeof word === "string" && word.trim().length > 0);
+
+    for (const word of parsed) {
+      sectionKeywords.push({ sectionIndex: section.id, word: word.trim() });
+    }
+  }
 
   const keywordRows = await db.insert(keywordsTable).values(
-    keywordWords.map((word) => ({
+    sectionKeywords.map((kw) => ({
       documentId: doc.id,
-      word,
+      word: kw.word,
       isSelected: false,
-    }))
+    })),
   ).returning();
 
-  const tocWithKeywordRefs = attachKeywordsToToc(tocTree, paragraphs, keywordRows);
+  const keywordsBySection = new Map<number, { id: number; word: string }[]>();
+  sectionKeywords.forEach((kw, index) => {
+    const row = keywordRows[index];
+    if (!row) return;
+    const list = keywordsBySection.get(kw.sectionIndex) ?? [];
+    list.push({ id: row.id, word: row.word });
+    keywordsBySection.set(kw.sectionIndex, list);
+  });
+
+  const tocWithKeywordRefs = tocTree.map((node) => ({
+    ...node,
+    keywords: keywordsBySection.get(Number(node.id)) ?? [],
+  }));
 
   res.json({
     documentId: doc.id,
