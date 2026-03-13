@@ -1,18 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useGetAnalyticsSummary } from "@workspace/api-client-react";
-import {
-  Flame,
-  Brain,
-  Layers,
-  CheckCircle2,
-  BookOpen,
-  History,
-  MoreHorizontal,
-  Sparkles,
-} from "lucide-react";
+import { BookOpen, History, MoreHorizontal, Sparkles, Layers } from "lucide-react";
 import { Link } from "wouter";
-import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 
 type NotebookTab = "all" | "materials" | "decks" | "history";
@@ -115,7 +104,6 @@ const TABS: { key: NotebookTab; label: string }[] = [
 ];
 
 export default function Dashboard() {
-  const { data: summary, isLoading } = useGetAnalyticsSummary();
   const [tab, setTab] = useState<NotebookTab>("all");
 
   const filteredItems = RECENT_ITEMS.filter((item) => {
@@ -158,53 +146,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <section>
-          <h2 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-            <Brain className="w-4 h-4 text-primary" />
-            学习概况
-          </h2>
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-[110px] rounded-2xl bg-muted/60 animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                title="待复习卡片"
-                value={summary?.dueToday ?? 0}
-                icon={<CheckCircle2 className="w-5 h-5" />}
-                description="今日需要完成的复习量"
-                delay={0.1}
-              />
-              <StatCard
-                title="连续学习"
-                value={`${summary?.streak ?? 0} 天`}
-                icon={<Flame className="w-5 h-5" />}
-                description="保持学习节奏"
-                delay={0.15}
-              />
-              <StatCard
-                title="总掌握卡片"
-                value={summary?.activeCards ?? 0}
-                icon={<Layers className="w-5 h-5" />}
-                description={`占总卡片 ${
-                  Math.round(((summary?.activeCards ?? 0) / Math.max(1, summary?.totalCards ?? 1)) * 100)
-                }%`}
-                delay={0.2}
-              />
-              <StatCard
-                title="记忆保持率"
-                value={`${Math.round((summary?.retentionRate ?? 0) * 100)}%`}
-                icon={<Brain className="w-5 h-5" />}
-                description="基于复习结果估算"
-                delay={0.25}
-              />
-            </div>
-          )}
-        </section>
-
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -214,14 +155,14 @@ export default function Dashboard() {
             <span className="text-xs text-muted-foreground">基于你的最近活动自动推荐</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">
             {FEATURED_DECKS.map((deck, index) => (
               <motion.div
                 key={deck.id}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 * index }}
-                className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+                className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 min-w-[260px] max-w-xs md:min-w-[280px]"
               >
                 <div
                   className={`pointer-events-none absolute inset-0 opacity-60 bg-gradient-to-br ${deck.accent}`}

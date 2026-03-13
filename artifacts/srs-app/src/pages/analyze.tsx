@@ -185,7 +185,7 @@ export default function Analyze() {
   const [stage, setStage] = useState<Stage>("input");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [documentId, setDocumentId] = useState<number | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [hoveredKeyword, setHoveredKeyword] = useState<number | null>(null);
   const [activeKeyword, setActiveKeyword] = useState<number | null>(null);

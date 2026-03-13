@@ -6,6 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetPendingCardsParams = {
-  documentId?: string;
+export type GetDueCardsParams = {
+  deckId?: number;
 };

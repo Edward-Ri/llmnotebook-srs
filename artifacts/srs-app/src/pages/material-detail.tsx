@@ -9,7 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function MaterialDetail() {
   const [, params] = useRoute<{ id: string }>("/materials/:id");
   const id = params?.id ?? "";
-  const numericId = Number.isNaN(Number(id)) ? undefined : Number(id);
 
   const {
     data: documentsData,
@@ -17,28 +16,16 @@ export default function MaterialDetail() {
   } = useListDocuments();
 
   const currentDocument = useMemo(() => {
-    if (!documentsData || !numericId) return undefined;
-    return documentsData.documents.find((doc) => doc.id === numericId);
-  }, [documentsData, numericId]);
+    if (!documentsData || !id) return undefined;
+    return documentsData.documents.find((doc) => String(doc.id) === id);
+  }, [documentsData, id]);
 
   const {
     data: keywordsData,
     isLoading: isKeywordsLoading,
-  } = useGetDocumentKeywords(
-    numericId
-      ? {
-          params: { documentId: numericId },
-        }
-      : // @ts-expect-error: orval hook currently requires params, guarded by enabled
-        undefined,
-    {
-      query: {
-        enabled: !!numericId,
-      },
-    },
-  );
+  } = useGetDocumentKeywords(id);
 
-  const isLoading = isDocsLoading || (numericId != null && isKeywordsLoading);
+  const isLoading = isDocsLoading || (id !== "" && isKeywordsLoading);
   const hasError = !isLoading && !currentDocument;
 
   return (

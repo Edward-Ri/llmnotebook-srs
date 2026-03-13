@@ -1,11 +1,11 @@
-import { pgTable, serial, text, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { documentsTable } from "./documents";
 
 export const keywordsTable = pgTable("keywords", {
   id: serial("id").primaryKey(),
-  documentId: integer("document_id").notNull().references(() => documentsTable.id),
+  documentId: uuid("document_id").notNull().references(() => documentsTable.id, { onDelete: "cascade" }),
   word: text("word").notNull(),
   isSelected: boolean("is_selected").notNull().default(false),
 });

@@ -5,10 +5,8 @@
  * AI辅助学习与间隔重复系统 API
  * OpenAPI spec version: 0.1.0
  */
-import type { Keyword } from "./keyword";
 
-export interface AnalyzeDocumentResponse {
-  documentId: string;
-  title?: string;
-  keywords: Keyword[];
+export interface CreateDeckRequest {
+  name: string;
+  description?: string;
 }

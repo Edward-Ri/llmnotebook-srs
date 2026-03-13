@@ -6,18 +6,34 @@ import {
   GenerateCardsBody,
   ValidateCardsBatchBody,
 } from "@workspace/api-zod";
-import { z } from "zod/v4";
 
 const router: IRouter = Router();
 
-const BatchAssignDeckBody = z.object({
-  assignments: z.array(
-    z.object({
-      id: z.number(),
-      deckId: z.number().nullable(),
-    }),
-  ),
-});
+function parseBatchAssignDeckBody(body: unknown): {
+  assignments: { id: number; deckId: number | null }[];
+} {
+  if (typeof body !== "object" || body === null) {
+    throw new Error("Invalid request body");
+  }
+  const maybe = body as { assignments?: unknown };
+  if (!Array.isArray(maybe.assignments)) {
+    throw new Error("Invalid request body: assignments must be an array");
+  }
+  const assignments = maybe.assignments.map((a) => {
+    if (typeof a !== "object" || a === null) {
+      throw new Error("Invalid assignment");
+    }
+    const aa = a as { id?: unknown; deckId?: unknown };
+    if (typeof aa.id !== "number" || Number.isNaN(aa.id)) {
+      throw new Error("Invalid assignment.id");
+    }
+    if (!(aa.deckId === null || typeof aa.deckId === "number")) {
+      throw new Error("Invalid assignment.deckId");
+    }
+    return { id: aa.id, deckId: aa.deckId as number | null };
+  });
+  return { assignments };
+}
 
 function generateCardContent(keyword: string): { front: string; back: string } {
   const templates = [
@@ -88,7 +104,7 @@ router.post("/generate", async (req, res) => {
 });
 
 router.get("/pending", async (req, res) => {
-  const documentId = req.query.documentId ? parseInt(req.query.documentId as string) : undefined;
+  const documentId = req.query.documentId ? (req.query.documentId as string) : undefined;
 
   let cardsQuery;
   if (documentId) {
@@ -155,7 +171,12 @@ router.put("/validate/batch", async (req, res) => {
 });
 
 router.patch("/batch-assign-deck", async (req, res) => {
-  const body = BatchAssignDeckBody.parse(req.body);
+  let body: { assignments: { id: number; deckId: number | null }[] };
+  try {
+    body = parseBatchAssignDeckBody(req.body);
+  } catch (e: any) {
+    return res.status(400).json({ error: e?.message ?? "Invalid request body" });
+  }
 
   for (const assignment of body.assignments) {
     await db
@@ -164,7 +185,7 @@ router.patch("/batch-assign-deck", async (req, res) => {
       .where(eq(cardsTable.id, assignment.id));
   }
 
-  res.json({ updated: body.assignments.length });
+  return res.json({ updated: body.assignments.length });
 });
 
 export default router;

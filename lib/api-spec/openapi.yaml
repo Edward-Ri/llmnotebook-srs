@@ -75,7 +75,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
       responses:
         "200":
           description: 关键词列表
@@ -92,7 +93,8 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -136,7 +138,8 @@ paths:
           in: query
           required: false
           schema:
-            type: integer
+            type: string
+            format: uuid
       responses:
         "200":
           description: 待校验卡片列表
@@ -270,19 +273,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewLogResponse"
 
-  /analytics/summary:
-    get:
-      operationId: getAnalyticsSummary
-      tags: [analytics]
-      summary: 获取学习分析摘要
-      responses:
-        "200":
-          description: 学习分析数据
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnalyticsSummary"
-
   /analytics/heatmap:
     get:
       operationId: getHeatmapData
@@ -322,7 +312,8 @@ components:
       type: object
       properties:
         documentId:
-          type: integer
+          type: string
+          format: uuid
         title:
           type: string
         keywords:
@@ -343,7 +334,8 @@ components:
         isSelected:
           type: boolean
         documentId:
-          type: integer
+          type: string
+          format: uuid
       required:
         - id
         - word
@@ -405,7 +397,8 @@ components:
       type: object
       properties:
         documentId:
-          type: integer
+          type: string
+          format: uuid
         keywordIds:
           type: array
           items:
@@ -551,7 +544,8 @@ components:
         dueDate:
           type: string
         documentId:
-          type: integer
+          type: string
+          format: uuid
         documentTitle:
           type: string
       required:

@@ -1,4 +1,4 @@
-import { useGetAnalyticsSummary, useGetHeatmapData } from "@workspace/api-client-react";
+import { useGetHeatmapData } from "@workspace/api-client-react";
 import { format, subDays, parseISO } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -6,8 +6,17 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Brain, Calendar, Target, Zap } from "lucide-react";
 
 export default function Analytics() {
-  const { data: summary, isLoading: sumLoading } = useGetAnalyticsSummary();
   const { data: heatmap, isLoading: heatLoading } = useGetHeatmapData();
+  const summary = undefined as
+    | {
+        retentionRate?: number;
+        activeCards?: number;
+        totalReviews?: number;
+        streak?: number;
+        averageGrade?: number;
+      }
+    | undefined;
+  const sumLoading = false;
 
   if (sumLoading || heatLoading) {
     return <div className="p-12 animate-pulse flex flex-col gap-8">

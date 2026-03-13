@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { cardsTable, keywordsTable, reviewLogsTable } from "@workspace/db/schema";
 import { eq, and, lte, count, gte } from "drizzle-orm";
-import { z } from "zod/v4";
 import { LogReviewBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -36,16 +35,20 @@ function sm2Algorithm(
   return { newEfactor, newInterval, newRepetition };
 }
 
-const GetDueCardsQuery = z.object({
-  deckId: z.coerce.number().optional(),
-});
+function parseDeckId(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  return n;
+}
 
 router.get("/due", async (req, res) => {
   const now = new Date();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const { deckId } = GetDueCardsQuery.parse(req.query);
+  const deckId = parseDeckId((req.query as any)?.deckId);
 
   const conditions = [
     eq(cardsTable.status, "active"),
@@ -83,7 +86,7 @@ router.get("/due", async (req, res) => {
     })
   );
 
-  res.json({
+  return res.json({
     cards: cardsWithKeywords,
     total: cardsWithKeywords.length,
     todayReviewed: todayReviewed[0]?.count ?? 0,

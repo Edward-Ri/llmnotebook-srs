@@ -50,7 +50,6 @@ router.post("/analyze", async (req, res) => {
   
   const authUser = (req as any).authUser as { userId: number } | undefined;
   const [doc] = await db.insert(documentsTable).values({
-    content: body.content,
     title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
     userId: authUser?.userId ?? null,
   }).returning();
@@ -90,7 +89,7 @@ router.get("/", async (_req, res) => {
     return {
       id: doc.id,
       title: doc.title,
-      content: doc.content,
+      content: "",
       createdAt: doc.createdAt.toISOString(),
       keywordCount: kwCount[0]?.count ?? 0,
       cardCount: cardCount[0]?.count ?? 0,
@@ -101,7 +100,7 @@ router.get("/", async (_req, res) => {
 });
 
 router.get("/:documentId/keywords", async (req, res) => {
-  const documentId = parseInt(req.params.documentId);
+  const documentId = req.params.documentId;
   const keywords = await db.select().from(keywordsTable).where(eq(keywordsTable.documentId, documentId));
   res.json({
     keywords: keywords.map((k) => ({
@@ -114,7 +113,7 @@ router.get("/:documentId/keywords", async (req, res) => {
 });
 
 router.put("/:documentId/keywords", async (req, res) => {
-  const documentId = parseInt(req.params.documentId);
+  const documentId = req.params.documentId;
   const body = UpdateKeywordSelectionsBody.parse(req.body);
 
   const keywords = await db.select().from(keywordsTable).where(eq(keywordsTable.documentId, documentId));

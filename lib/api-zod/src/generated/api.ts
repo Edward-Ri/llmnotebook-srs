@@ -23,14 +23,14 @@ export const AnalyzeDocumentBody = zod.object({
 });
 
 export const AnalyzeDocumentResponse = zod.object({
-  documentId: zod.number(),
+  documentId: zod.string().uuid(),
   title: zod.string().optional(),
   keywords: zod.array(
     zod.object({
       id: zod.number(),
       word: zod.string(),
       isSelected: zod.boolean(),
-      documentId: zod.number(),
+      documentId: zod.string().uuid(),
     }),
   ),
 });
@@ -55,7 +55,7 @@ export const ListDocumentsResponse = zod.object({
  * @summary 获取文档关键词
  */
 export const GetDocumentKeywordsParams = zod.object({
-  documentId: zod.coerce.number(),
+  documentId: zod.coerce.string().uuid(),
 });
 
 export const GetDocumentKeywordsResponse = zod.object({
@@ -64,7 +64,7 @@ export const GetDocumentKeywordsResponse = zod.object({
       id: zod.number(),
       word: zod.string(),
       isSelected: zod.boolean(),
-      documentId: zod.number(),
+      documentId: zod.string().uuid(),
     }),
   ),
 });
@@ -73,7 +73,7 @@ export const GetDocumentKeywordsResponse = zod.object({
  * @summary 更新关键词选择状态
  */
 export const UpdateKeywordSelectionsParams = zod.object({
-  documentId: zod.coerce.number(),
+  documentId: zod.coerce.string().uuid(),
 });
 
 export const UpdateKeywordSelectionsBody = zod.object({
@@ -86,7 +86,7 @@ export const UpdateKeywordSelectionsResponse = zod.object({
       id: zod.number(),
       word: zod.string(),
       isSelected: zod.boolean(),
-      documentId: zod.number(),
+      documentId: zod.string().uuid(),
     }),
   ),
 });
@@ -95,7 +95,7 @@ export const UpdateKeywordSelectionsResponse = zod.object({
  * @summary 基于选中关键词生成候选卡片
  */
 export const GenerateCardsBody = zod.object({
-  documentId: zod.number(),
+  documentId: zod.string().uuid(),
   keywordIds: zod.array(zod.number()),
 });
 
@@ -121,7 +121,7 @@ export const GenerateCardsResponse = zod.object({
  * @summary 获取待校验的卡片
  */
 export const GetPendingCardsQueryParams = zod.object({
-  documentId: zod.coerce.number().optional(),
+  documentId: zod.coerce.string().uuid().optional(),
 });
 
 export const GetPendingCardsResponse = zod.object({
@@ -163,8 +163,28 @@ export const ValidateCardsBatchResponse = zod.object({
 });
 
 /**
+ * @summary 批量分配卡片到卡片组
+ */
+export const BatchAssignDeckBody = zod.object({
+  assignments: zod.array(
+    zod.object({
+      id: zod.number(),
+      deckId: zod.number().nullish(),
+    }),
+  ),
+});
+
+export const BatchAssignDeckResponse = zod.object({
+  updated: zod.number(),
+});
+
+/**
  * @summary 获取今日到期复习卡片
  */
+export const GetDueCardsQueryParams = zod.object({
+  deckId: zod.coerce.number().optional(),
+});
+
 export const GetDueCardsResponse = zod.object({
   cards: zod.array(
     zod.object({
@@ -182,6 +202,61 @@ export const GetDueCardsResponse = zod.object({
   ),
   total: zod.number(),
   todayReviewed: zod.number(),
+});
+
+/**
+ * @summary 获取所有卡片组列表
+ */
+export const ListDecksResponse = zod.object({
+  decks: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      description: zod.string().optional(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      totalCards: zod.number(),
+      dueCards: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary 创建新的卡片组
+ */
+export const CreateDeckBody = zod.object({
+  name: zod.string(),
+  description: zod.string().optional(),
+});
+
+/**
+ * @summary 获取单个卡片组详情
+ */
+export const GetDeckParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetDeckResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  totalCards: zod.number(),
+  dueCards: zod.number(),
+  cards: zod.array(
+    zod.object({
+      id: zod.number(),
+      frontContent: zod.string(),
+      backContent: zod.string(),
+      status: zod.string(),
+      keywordId: zod.number(),
+      keyword: zod.string().optional(),
+      dueDate: zod.string().optional(),
+      documentId: zod.string().uuid().optional(),
+      documentTitle: zod.string().optional(),
+    }),
+  ),
 });
 
 /**
@@ -214,19 +289,6 @@ export const LogReviewResponse = zod.object({
   }),
   nextDueDate: zod.string(),
   newInterval: zod.number(),
-});
-
-/**
- * @summary 获取学习分析摘要
- */
-export const GetAnalyticsSummaryResponse = zod.object({
-  totalCards: zod.number(),
-  activeCards: zod.number(),
-  totalReviews: zod.number(),
-  todayReviews: zod.number(),
-  retentionRate: zod.number(),
-  streak: zod.number(),
-  dueToday: zod.number(),
 });
 
 /**

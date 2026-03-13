@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetPendingCardsParams = {
-  documentId?: string;
+export type BatchAssignDeckRequestAssignmentsItem = {
+  id: number;
+  deckId?: number | null;
 };

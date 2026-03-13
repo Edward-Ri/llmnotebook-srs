@@ -2,14 +2,22 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { decksTable, cardsTable, keywordsTable, documentsTable } from "@workspace/db/schema";
 import { and, count, eq, lte } from "drizzle-orm";
-import { z } from "zod/v4";
 
 const router: IRouter = Router();
 
-const CreateDeckBody = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-});
+function parseCreateDeckBody(body: unknown): { name: string; description?: string } {
+  if (typeof body !== "object" || body === null) {
+    throw new Error("Invalid request body");
+  }
+  const maybe = body as { name?: unknown; description?: unknown };
+  if (typeof maybe.name !== "string" || maybe.name.trim().length === 0) {
+    throw new Error("Invalid name");
+  }
+  if (!(maybe.description === undefined || typeof maybe.description === "string")) {
+    throw new Error("Invalid description");
+  }
+  return { name: maybe.name.trim(), description: maybe.description };
+}
 
 router.get("/", async (_req, res) => {
   const decks = await db.select().from(decksTable).orderBy(decksTable.createdAt);
@@ -49,7 +57,12 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const body = CreateDeckBody.parse(req.body);
+  let body: { name: string; description?: string };
+  try {
+    body = parseCreateDeckBody(req.body);
+  } catch (e: any) {
+    return res.status(400).json({ error: e?.message ?? "Invalid request body" });
+  }
 
   const [deck] = await db
     .insert(decksTable)
@@ -59,7 +72,7 @@ router.post("/", async (req, res) => {
     })
     .returning();
 
-  res.status(201).json({
+  return res.status(201).json({
     id: deck.id,
     name: deck.name,
     description: deck.description ?? "",
@@ -114,7 +127,7 @@ router.get("/:id", async (req, res) => {
       )
     );
 
-  res.json({
+  return res.json({
     id: deck.id,
     name: deck.name,
     description: deck.description ?? "",

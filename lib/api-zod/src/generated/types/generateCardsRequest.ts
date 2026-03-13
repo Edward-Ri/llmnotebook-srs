@@ -7,6 +7,6 @@
  */
 
 export interface GenerateCardsRequest {
-  documentId: number;
+  documentId: string;
   keywordIds: number[];
 }

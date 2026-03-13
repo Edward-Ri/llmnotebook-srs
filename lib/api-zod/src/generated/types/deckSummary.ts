@@ -6,9 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Keyword {
+export interface DeckSummary {
   id: number;
-  word: string;
-  isSelected: boolean;
-  documentId: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  totalCards: number;
+  dueCards: number;
 }

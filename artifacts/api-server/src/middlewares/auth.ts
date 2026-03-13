@@ -33,5 +33,5 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!(req as any).authUser) {
     return res.status(401).json({ error: "请先登录" });
   }
-  next();
+  return next();
 }

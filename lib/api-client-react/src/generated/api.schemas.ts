@@ -20,11 +20,11 @@ export interface Keyword {
   id: number;
   word: string;
   isSelected: boolean;
-  documentId: number;
+  documentId: string;
 }
 
 export interface AnalyzeDocumentResponse {
-  documentId: number;
+  documentId: string;
   title?: string;
   keywords: Keyword[];
 }
@@ -51,7 +51,7 @@ export interface DocumentListResponse {
 }
 
 export interface GenerateCardsRequest {
-  documentId: number;
+  documentId: string;
   keywordIds: number[];
 }
 
@@ -107,6 +107,61 @@ export interface BatchValidationResponse {
   discarded: number;
 }
 
+export interface DeckSummary {
+  id: number;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  totalCards: number;
+  dueCards: number;
+}
+
+export interface DeckListResponse {
+  decks: DeckSummary[];
+}
+
+export interface DeckCard {
+  id: number;
+  frontContent: string;
+  backContent: string;
+  status: string;
+  keywordId: number;
+  keyword?: string;
+  dueDate?: string;
+  documentId?: string;
+  documentTitle?: string;
+}
+
+export interface DeckDetail {
+  id: number;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  totalCards: number;
+  dueCards: number;
+  cards: DeckCard[];
+}
+
+export interface CreateDeckRequest {
+  name: string;
+  description?: string;
+}
+
+export type BatchAssignDeckRequestAssignmentsItem = {
+  id: number;
+  deckId?: number | null;
+};
+
+export interface BatchAssignDeckRequest {
+  assignments: BatchAssignDeckRequestAssignmentsItem[];
+}
+
+export interface BatchAssignDeckResponse {
+  updated: number;
+}
+
 export interface DueCardsResponse {
   cards: Card[];
   total: number;
@@ -149,5 +204,9 @@ export interface HeatmapResponse {
 }
 
 export type GetPendingCardsParams = {
-  documentId?: number;
+  documentId?: string;
+};
+
+export type GetDueCardsParams = {
+  deckId?: number;
 };

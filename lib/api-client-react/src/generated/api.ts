@@ -17,14 +17,20 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  AnalyticsSummary,
   AnalyzeDocumentRequest,
   AnalyzeDocumentResponse,
+  BatchAssignDeckRequest,
+  BatchAssignDeckResponse,
   BatchValidationResponse,
   CardListResponse,
+  CreateDeckRequest,
+  DeckDetail,
+  DeckListResponse,
+  DeckSummary,
   DocumentListResponse,
   DueCardsResponse,
   GenerateCardsRequest,
+  GetDueCardsParams,
   GetPendingCardsParams,
   HealthStatus,
   HeatmapResponse,
@@ -283,12 +289,12 @@ export function useListDocuments<
 /**
  * @summary 获取文档关键词
  */
-export const getGetDocumentKeywordsUrl = (documentId: number) => {
+export const getGetDocumentKeywordsUrl = (documentId: string) => {
   return `/api/documents/${documentId}/keywords`;
 };
 
 export const getDocumentKeywords = async (
-  documentId: number,
+  documentId: string,
   options?: RequestInit,
 ): Promise<KeywordListResponse> => {
   return customFetch<KeywordListResponse>(
@@ -300,7 +306,7 @@ export const getDocumentKeywords = async (
   );
 };
 
-export const getGetDocumentKeywordsQueryKey = (documentId: number) => {
+export const getGetDocumentKeywordsQueryKey = (documentId: string) => {
   return [`/api/documents/${documentId}/keywords`] as const;
 };
 
@@ -308,7 +314,7 @@ export const getGetDocumentKeywordsQueryOptions = <
   TData = Awaited<ReturnType<typeof getDocumentKeywords>>,
   TError = ErrorType<unknown>,
 >(
-  documentId: number,
+  documentId: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getDocumentKeywords>>,
@@ -353,7 +359,7 @@ export function useGetDocumentKeywords<
   TData = Awaited<ReturnType<typeof getDocumentKeywords>>,
   TError = ErrorType<unknown>,
 >(
-  documentId: number,
+  documentId: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getDocumentKeywords>>,
@@ -375,12 +381,12 @@ export function useGetDocumentKeywords<
 /**
  * @summary 更新关键词选择状态
  */
-export const getUpdateKeywordSelectionsUrl = (documentId: number) => {
+export const getUpdateKeywordSelectionsUrl = (documentId: string) => {
   return `/api/documents/${documentId}/keywords`;
 };
 
 export const updateKeywordSelections = async (
-  documentId: number,
+  documentId: string,
   updateKeywordsRequest: UpdateKeywordsRequest,
   options?: RequestInit,
 ): Promise<KeywordListResponse> => {
@@ -402,14 +408,14 @@ export const getUpdateKeywordSelectionsMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateKeywordSelections>>,
     TError,
-    { documentId: number; data: BodyType<UpdateKeywordsRequest> },
+    { documentId: string; data: BodyType<UpdateKeywordsRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateKeywordSelections>>,
   TError,
-  { documentId: number; data: BodyType<UpdateKeywordsRequest> },
+  { documentId: string; data: BodyType<UpdateKeywordsRequest> },
   TContext
 > => {
   const mutationKey = ["updateKeywordSelections"];
@@ -423,7 +429,7 @@ export const getUpdateKeywordSelectionsMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateKeywordSelections>>,
-    { documentId: number; data: BodyType<UpdateKeywordsRequest> }
+    { documentId: string; data: BodyType<UpdateKeywordsRequest> }
   > = (props) => {
     const { documentId, data } = props ?? {};
 
@@ -450,14 +456,14 @@ export const useUpdateKeywordSelections = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateKeywordSelections>>,
     TError,
-    { documentId: number; data: BodyType<UpdateKeywordsRequest> },
+    { documentId: string; data: BodyType<UpdateKeywordsRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof updateKeywordSelections>>,
   TError,
-  { documentId: number; data: BodyType<UpdateKeywordsRequest> },
+  { documentId: string; data: BodyType<UpdateKeywordsRequest> },
   TContext
 > => {
   return useMutation(getUpdateKeywordSelectionsMutationOptions(options));
@@ -731,43 +737,145 @@ export const useValidateCardsBatch = <
 };
 
 /**
+ * @summary 批量分配卡片到卡片组
+ */
+export const getBatchAssignDeckUrl = () => {
+  return `/api/cards/batch-assign-deck`;
+};
+
+export const batchAssignDeck = async (
+  batchAssignDeckRequest: BatchAssignDeckRequest,
+  options?: RequestInit,
+): Promise<BatchAssignDeckResponse> => {
+  return customFetch<BatchAssignDeckResponse>(getBatchAssignDeckUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(batchAssignDeckRequest),
+  });
+};
+
+export const getBatchAssignDeckMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof batchAssignDeck>>,
+    TError,
+    { data: BodyType<BatchAssignDeckRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof batchAssignDeck>>,
+  TError,
+  { data: BodyType<BatchAssignDeckRequest> },
+  TContext
+> => {
+  const mutationKey = ["batchAssignDeck"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof batchAssignDeck>>,
+    { data: BodyType<BatchAssignDeckRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return batchAssignDeck(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BatchAssignDeckMutationResult = NonNullable<
+  Awaited<ReturnType<typeof batchAssignDeck>>
+>;
+export type BatchAssignDeckMutationBody = BodyType<BatchAssignDeckRequest>;
+export type BatchAssignDeckMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 批量分配卡片到卡片组
+ */
+export const useBatchAssignDeck = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof batchAssignDeck>>,
+    TError,
+    { data: BodyType<BatchAssignDeckRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof batchAssignDeck>>,
+  TError,
+  { data: BodyType<BatchAssignDeckRequest> },
+  TContext
+> => {
+  return useMutation(getBatchAssignDeckMutationOptions(options));
+};
+
+/**
  * @summary 获取今日到期复习卡片
  */
-export const getGetDueCardsUrl = () => {
-  return `/api/reviews/due`;
+export const getGetDueCardsUrl = (params?: GetDueCardsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reviews/due?${stringifiedParams}`
+    : `/api/reviews/due`;
 };
 
 export const getDueCards = async (
+  params?: GetDueCardsParams,
   options?: RequestInit,
 ): Promise<DueCardsResponse> => {
-  return customFetch<DueCardsResponse>(getGetDueCardsUrl(), {
+  return customFetch<DueCardsResponse>(getGetDueCardsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetDueCardsQueryKey = () => {
-  return [`/api/reviews/due`] as const;
+export const getGetDueCardsQueryKey = (params?: GetDueCardsParams) => {
+  return [`/api/reviews/due`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetDueCardsQueryOptions = <
   TData = Awaited<ReturnType<typeof getDueCards>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getDueCards>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: GetDueCardsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDueCards>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetDueCardsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetDueCardsQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getDueCards>>> = ({
     signal,
-  }) => getDueCards({ signal, ...requestOptions });
+  }) => getDueCards(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getDueCards>>,
@@ -788,15 +896,248 @@ export type GetDueCardsQueryError = ErrorType<unknown>;
 export function useGetDueCards<
   TData = Awaited<ReturnType<typeof getDueCards>>,
   TError = ErrorType<unknown>,
+>(
+  params?: GetDueCardsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDueCards>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDueCardsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary 获取所有卡片组列表
+ */
+export const getListDecksUrl = () => {
+  return `/api/decks`;
+};
+
+export const listDecks = async (
+  options?: RequestInit,
+): Promise<DeckListResponse> => {
+  return customFetch<DeckListResponse>(getListDecksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDecksQueryKey = () => {
+  return [`/api/decks`] as const;
+};
+
+export const getListDecksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDecks>>,
+  TError = ErrorType<unknown>,
 >(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getDueCards>>,
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listDecks>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDecksQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDecks>>> = ({
+    signal,
+  }) => listDecks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDecks>>,
     TError,
     TData
-  >;
+  > & { queryKey: QueryKey };
+};
+
+export type ListDecksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDecks>>
+>;
+export type ListDecksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary 获取所有卡片组列表
+ */
+
+export function useListDecks<
+  TData = Awaited<ReturnType<typeof listDecks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listDecks>>, TError, TData>;
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetDueCardsQueryOptions(options);
+  const queryOptions = getListDecksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary 创建新的卡片组
+ */
+export const getCreateDeckUrl = () => {
+  return `/api/decks`;
+};
+
+export const createDeck = async (
+  createDeckRequest: CreateDeckRequest,
+  options?: RequestInit,
+): Promise<DeckSummary> => {
+  return customFetch<DeckSummary>(getCreateDeckUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDeckRequest),
+  });
+};
+
+export const getCreateDeckMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDeck>>,
+    TError,
+    { data: BodyType<CreateDeckRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDeck>>,
+  TError,
+  { data: BodyType<CreateDeckRequest> },
+  TContext
+> => {
+  const mutationKey = ["createDeck"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDeck>>,
+    { data: BodyType<CreateDeckRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDeck(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDeckMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDeck>>
+>;
+export type CreateDeckMutationBody = BodyType<CreateDeckRequest>;
+export type CreateDeckMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 创建新的卡片组
+ */
+export const useCreateDeck = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDeck>>,
+    TError,
+    { data: BodyType<CreateDeckRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDeck>>,
+  TError,
+  { data: BodyType<CreateDeckRequest> },
+  TContext
+> => {
+  return useMutation(getCreateDeckMutationOptions(options));
+};
+
+/**
+ * @summary 获取单个卡片组详情
+ */
+export const getGetDeckUrl = (id: number) => {
+  return `/api/decks/${id}`;
+};
+
+export const getDeck = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DeckDetail> => {
+  return customFetch<DeckDetail>(getGetDeckUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDeckQueryKey = (id: number) => {
+  return [`/api/decks/${id}`] as const;
+};
+
+export const getGetDeckQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDeck>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDeck>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDeckQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeck>>> = ({
+    signal,
+  }) => getDeck(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getDeck>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetDeckQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDeck>>
+>;
+export type GetDeckQueryError = ErrorType<unknown>;
+
+/**
+ * @summary 获取单个卡片组详情
+ */
+
+export function useGetDeck<
+  TData = Awaited<ReturnType<typeof getDeck>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getDeck>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDeckQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -890,81 +1231,6 @@ export const useLogReview = <
 > => {
   return useMutation(getLogReviewMutationOptions(options));
 };
-
-/**
- * @summary 获取学习分析摘要
- */
-export const getGetAnalyticsSummaryUrl = () => {
-  return `/api/analytics/summary`;
-};
-
-export const getAnalyticsSummary = async (
-  options?: RequestInit,
-): Promise<AnalyticsSummary> => {
-  return customFetch<AnalyticsSummary>(getGetAnalyticsSummaryUrl(), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getGetAnalyticsSummaryQueryKey = () => {
-  return [`/api/analytics/summary`] as const;
-};
-
-export const getGetAnalyticsSummaryQueryOptions = <
-  TData = Awaited<ReturnType<typeof getAnalyticsSummary>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getAnalyticsSummary>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey = queryOptions?.queryKey ?? getGetAnalyticsSummaryQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getAnalyticsSummary>>
-  > = ({ signal }) => getAnalyticsSummary({ signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getAnalyticsSummary>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetAnalyticsSummaryQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getAnalyticsSummary>>
->;
-export type GetAnalyticsSummaryQueryError = ErrorType<unknown>;
-
-/**
- * @summary 获取学习分析摘要
- */
-
-export function useGetAnalyticsSummary<
-  TData = Awaited<ReturnType<typeof getAnalyticsSummary>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getAnalyticsSummary>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetAnalyticsSummaryQueryOptions(options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
 
 /**
  * @summary 获取学习热力图数据

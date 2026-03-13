@@ -4,7 +4,7 @@ import {
   useValidateCardsBatch,
   useListDecks,
   useCreateDeck,
-  useAssignCardsToDeck,
+  useBatchAssignDeck,
 } from "@workspace/api-client-react";
 import type {
   Card,
@@ -29,7 +29,7 @@ type ValidationState = {
 export default function Validate() {
   const searchParams = new URLSearchParams(window.location.search);
   const documentIdParam = searchParams.get("documentId");
-  const documentId = documentIdParam ? Number(documentIdParam) : undefined;
+  const documentId = documentIdParam || undefined;
 
   const { data, isLoading } = useGetPendingCards(
     documentId ? { documentId } : undefined,
@@ -37,7 +37,7 @@ export default function Validate() {
   const validateBatchMutation = useValidateCardsBatch();
   const { data: decksData } = useListDecks();
   const createDeckMutation = useCreateDeck();
-  const assignDeckMutation = useAssignCardsToDeck();
+  const assignDeckMutation = useBatchAssignDeck();
   const { toast } = useToast();
 
   const [cards, setCards] = useState<Card[]>([]);
