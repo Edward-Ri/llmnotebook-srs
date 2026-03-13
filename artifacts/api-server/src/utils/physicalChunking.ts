@@ -10,7 +10,7 @@ export type Section = {
 };
 
 export type TOCKeyword = {
-  id: number;
+  id: string;
   word: string;
 };
 

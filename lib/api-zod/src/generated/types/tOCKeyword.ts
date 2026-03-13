@@ -7,6 +7,6 @@
  */
 
 export interface TOCKeyword {
-  id: number;
+  id: string;
   word: string;
 }

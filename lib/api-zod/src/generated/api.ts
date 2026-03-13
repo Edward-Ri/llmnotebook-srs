@@ -27,7 +27,7 @@ export const AnalyzeDocumentResponse = zod.object({
   title: zod.string().optional(),
   keywords: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       word: zod.string(),
       isSelected: zod.boolean(),
       documentId: zod.string().uuid(),
@@ -42,7 +42,7 @@ export const AnalyzeDocumentResponse = zod.object({
       children: zod.array(zod.unknown()),
       keywords: zod.array(
         zod.object({
-          id: zod.number(),
+          id: zod.string().uuid(),
           word: zod.string(),
         }),
       ),
@@ -56,7 +56,7 @@ export const AnalyzeDocumentResponse = zod.object({
 export const ListDocumentsResponse = zod.object({
   documents: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       title: zod.string(),
       content: zod.string(),
       createdAt: zod.string(),
@@ -76,7 +76,7 @@ export const GetDocumentKeywordsParams = zod.object({
 export const GetDocumentKeywordsResponse = zod.object({
   keywords: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       word: zod.string(),
       isSelected: zod.boolean(),
       documentId: zod.string().uuid(),
@@ -92,13 +92,13 @@ export const UpdateKeywordSelectionsParams = zod.object({
 });
 
 export const UpdateKeywordSelectionsBody = zod.object({
-  selectedIds: zod.array(zod.number()),
+  selectedIds: zod.array(zod.string().uuid()),
 });
 
 export const UpdateKeywordSelectionsResponse = zod.object({
   keywords: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       word: zod.string(),
       isSelected: zod.boolean(),
       documentId: zod.string().uuid(),
@@ -111,17 +111,17 @@ export const UpdateKeywordSelectionsResponse = zod.object({
  */
 export const GenerateCardsBody = zod.object({
   documentId: zod.string().uuid(),
-  keywordIds: zod.array(zod.number()),
+  keywordIds: zod.array(zod.string().uuid()),
 });
 
 export const GenerateCardsResponse = zod.object({
   cards: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.enum(["pending_validation", "active", "discarded"]),
-      keywordId: zod.number(),
+      keywordId: zod.string().uuid(),
       keyword: zod.string().optional(),
       sm2Interval: zod.number().optional(),
       sm2Repetition: zod.number().optional(),
@@ -142,11 +142,11 @@ export const GetPendingCardsQueryParams = zod.object({
 export const GetPendingCardsResponse = zod.object({
   cards: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.enum(["pending_validation", "active", "discarded"]),
-      keywordId: zod.number(),
+      keywordId: zod.string().uuid(),
       keyword: zod.string().optional(),
       sm2Interval: zod.number().optional(),
       sm2Repetition: zod.number().optional(),
@@ -163,7 +163,7 @@ export const GetPendingCardsResponse = zod.object({
 export const ValidateCardsBatchBody = zod.object({
   validations: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       action: zod.enum(["keep", "edit", "discard"]),
       frontContent: zod.string().optional(),
       backContent: zod.string().optional(),
@@ -183,8 +183,8 @@ export const ValidateCardsBatchResponse = zod.object({
 export const BatchAssignDeckBody = zod.object({
   assignments: zod.array(
     zod.object({
-      id: zod.number(),
-      deckId: zod.number().nullish(),
+      id: zod.string().uuid(),
+      deckId: zod.string().uuid().nullish(),
     }),
   ),
 });
@@ -203,11 +203,11 @@ export const GetDueCardsQueryParams = zod.object({
 export const GetDueCardsResponse = zod.object({
   cards: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.enum(["pending_validation", "active", "discarded"]),
-      keywordId: zod.number(),
+      keywordId: zod.string().uuid(),
       keyword: zod.string().optional(),
       sm2Interval: zod.number().optional(),
       sm2Repetition: zod.number().optional(),
@@ -225,7 +225,7 @@ export const GetDueCardsResponse = zod.object({
 export const ListDecksResponse = zod.object({
   decks: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       name: zod.string(),
       description: zod.string().optional(),
       createdAt: zod.string(),
@@ -252,7 +252,7 @@ export const GetDeckParams = zod.object({
 });
 
 export const GetDeckResponse = zod.object({
-  id: zod.number(),
+  id: zod.string().uuid(),
   name: zod.string(),
   description: zod.string().optional(),
   createdAt: zod.string(),
@@ -261,11 +261,11 @@ export const GetDeckResponse = zod.object({
   dueCards: zod.number(),
   cards: zod.array(
     zod.object({
-      id: zod.number(),
+      id: zod.string().uuid(),
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.string(),
-      keywordId: zod.number(),
+      keywordId: zod.string().uuid(),
       keyword: zod.string().optional(),
       dueDate: zod.string().optional(),
       documentId: zod.string().uuid().optional(),
@@ -281,7 +281,7 @@ export const logReviewBodyGradeMin = 0;
 export const logReviewBodyGradeMax = 3;
 
 export const LogReviewBody = zod.object({
-  cardId: zod.number(),
+  cardId: zod.string().uuid(),
   grade: zod
     .number()
     .min(logReviewBodyGradeMin)
@@ -291,11 +291,11 @@ export const LogReviewBody = zod.object({
 
 export const LogReviewResponse = zod.object({
   card: zod.object({
-    id: zod.number(),
+    id: zod.string().uuid(),
     frontContent: zod.string(),
     backContent: zod.string(),
     status: zod.enum(["pending_validation", "active", "discarded"]),
-    keywordId: zod.number(),
+    keywordId: zod.string().uuid(),
     keyword: zod.string().optional(),
     sm2Interval: zod.number().optional(),
     sm2Repetition: zod.number().optional(),

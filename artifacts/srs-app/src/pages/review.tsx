@@ -13,7 +13,7 @@ export default function Review() {
   const search = typeof window !== "undefined" ? window.location.search : "";
   const searchParams = new URLSearchParams(search);
   const deckIdParam = searchParams.get("deckId");
-  const deckId = deckIdParam ? Number(deckIdParam) : undefined;
+  const deckId = deckIdParam ?? undefined;
 
   const baseDue = useGetDueCards();
 
@@ -29,7 +29,7 @@ export default function Review() {
     },
   });
 
-  const deckMeta = useQuery<{ id: number; name: string }, Error>({
+  const deckMeta = useQuery<{ id: string; name: string }, Error>({
     queryKey: ["/api/decks", deckId],
     enabled: !!deckId,
     queryFn: async ({ signal }) => {

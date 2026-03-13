@@ -3,9 +3,9 @@ import { db } from "@workspace/db";
 import {
   documentsTable,
   keywordsTable,
-  cardsTable,
   textBlocksTable,
   sectionsTable,
+  flashcardsTable,
 } from "@workspace/db/schema";
 import { eq, count } from "drizzle-orm";
 import {
@@ -37,30 +37,29 @@ function parseKeywordJson(raw: string): LlmKeyword[] {
 }
 
 router.post("/analyze", async (req, res) => {
-  const body = AnalyzeDocumentBody.parse(req.body);
+  try {
+    const body = AnalyzeDocumentBody.parse(req.body);
 
-  const paragraphs = physicalChunk(body.content);
-  const sections = segmentSections(paragraphs);
-  const tocTree = buildTocTree(sections, paragraphs);
+    const paragraphs = physicalChunk(body.content);
+    const sections = segmentSections(paragraphs);
+    const tocTree = buildTocTree(sections, paragraphs);
 
-  const authUser = (req as any).authUser as { userId: number } | undefined;
-  const [doc] = await db.insert(documentsTable).values({
-    title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
-    userId: authUser?.userId ?? null,
-  }).returning();
+    const [doc] = await db.insert(documentsTable).values({
+      title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
+    }).returning();
 
-  if (paragraphs.length > 0) {
-    await db.insert(textBlocksTable).values(
-      paragraphs.map((block) => ({
-        documentId: doc.id,
-        content: block.content,
-        positionIndex: block.index,
-      })),
-    );
-  }
+    if (paragraphs.length > 0) {
+      await db.insert(textBlocksTable).values(
+        paragraphs.map((block) => ({
+          documentId: doc.id,
+          content: block.content,
+          positionIndex: block.index,
+        })),
+      );
+    }
 
-  if (sections.length > 0) {
-    await db.insert(sectionsTable).values(
+    const savedSections = sections.length > 0
+      ? await db.insert(sectionsTable).values(
       sections.map((section) => ({
         documentId: doc.id,
         parentSectionId: null,
@@ -69,89 +68,137 @@ router.post("/analyze", async (req, res) => {
         endBlockIndex: section.endIndex,
         level: 1,
       })),
-    );
-  }
+    ).returning({
+      id: sectionsTable.id,
+      startBlockIndex: sectionsTable.startBlockIndex,
+      endBlockIndex: sectionsTable.endBlockIndex,
+    })
+      : [];
 
-  const sectionKeywords: { sectionIndex: number; word: string }[] = [];
-
-  for (const section of sections) {
-    const sectionBlocks = paragraphs
-      .slice(section.startIndex, section.endIndex + 1)
-      .map((block) => block.content);
-
-    const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content:
-          "你是知识提取专家。请根据给定标题与文本块，输出严格的 JSON 数组，" +
-          "每项包含 {\"word\":\"词汇\",\"reason\":\"提取理由\",\"score\":1-5}。" +
-          "仅输出 JSON，不要多余文本。",
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          title: doc.title,
-          blocks: sectionBlocks,
-        }),
-      },
-    ];
-
-    const raw = await deepseekChat(messages, { temperature: 0.2 });
-    const parsed = parseKeywordJson(raw)
-      .filter((item) => Number(item.score ?? 0) >= 3)
-      .map((item) => item.word)
-      .filter((word) => typeof word === "string" && word.trim().length > 0);
-
-    for (const word of parsed) {
-      sectionKeywords.push({ sectionIndex: section.id, word: word.trim() });
+    const sectionIdByRange = new Map<string, string>();
+    for (const saved of savedSections) {
+      sectionIdByRange.set(`${saved.startBlockIndex}-${saved.endBlockIndex}`, saved.id);
     }
-  }
 
-  const keywordRows = await db.insert(keywordsTable).values(
-    sectionKeywords.map((kw) => ({
+    const sectionKeywords: { sectionIndex: number; sectionId: string; word: string }[] = [];
+
+    for (const section of sections) {
+      const sectionBlocks = paragraphs
+        .slice(section.startIndex, section.endIndex + 1)
+        .map((block) => block.content);
+
+      const sectionId = sectionIdByRange.get(
+        `${section.startIndex}-${section.endIndex}`,
+      );
+      if (!sectionId) continue;
+
+      const messages: ChatMessage[] = [
+        {
+          role: "system",
+          content:
+            "你是知识提取专家。请根据给定标题与文本块，输出严格的 JSON 数组，" +
+            "每项包含 {\"word\":\"词汇\",\"reason\":\"提取理由\",\"score\":1-5}。" +
+            "仅输出 JSON，不要多余文本。",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            title: doc.title,
+            blocks: sectionBlocks,
+          }),
+        },
+      ];
+
+      let raw: string;
+      try {
+        raw = await deepseekChat(messages, { temperature: 0.2 });
+      } catch (err: any) {
+        throw new Error(
+          `LLM_ERROR: ${err?.message ?? "DeepSeek request failed"}`,
+        );
+      }
+
+      const parsed = parseKeywordJson(raw)
+        .filter((item) => Number(item.score ?? 0) >= 3)
+        .map((item) => item.word)
+        .filter((word) => typeof word === "string" && word.trim().length > 0);
+
+      for (const word of parsed) {
+        sectionKeywords.push({
+          sectionIndex: section.id,
+          sectionId,
+          word: word.trim(),
+        });
+      }
+    }
+
+    const keywordRows = await db.insert(keywordsTable).values(
+      sectionKeywords.map((kw) => ({
+        sectionId: kw.sectionId,
+        textBlockId: null,
+        word: kw.word,
+        status: "PENDING",
+      })),
+    ).returning();
+
+    const keywordsBySection = new Map<number, { id: string; word: string }[]>();
+    sectionKeywords.forEach((kw, index) => {
+      const row = keywordRows[index];
+      if (!row) return;
+      const list = keywordsBySection.get(kw.sectionIndex) ?? [];
+      list.push({ id: row.id, word: row.word });
+      keywordsBySection.set(kw.sectionIndex, list);
+    });
+
+    const tocWithKeywordRefs = tocTree.map((node) => ({
+      ...node,
+      keywords: keywordsBySection.get(Number(node.id)) ?? [],
+    }));
+
+    res.json({
       documentId: doc.id,
-      word: kw.word,
-      isSelected: false,
-    })),
-  ).returning();
-
-  const keywordsBySection = new Map<number, { id: number; word: string }[]>();
-  sectionKeywords.forEach((kw, index) => {
-    const row = keywordRows[index];
-    if (!row) return;
-    const list = keywordsBySection.get(kw.sectionIndex) ?? [];
-    list.push({ id: row.id, word: row.word });
-    keywordsBySection.set(kw.sectionIndex, list);
-  });
-
-  const tocWithKeywordRefs = tocTree.map((node) => ({
-    ...node,
-    keywords: keywordsBySection.get(Number(node.id)) ?? [],
-  }));
-
-  res.json({
-    documentId: doc.id,
-    title: doc.title,
-    keywords: keywordRows.map((k) => ({
-      id: k.id,
-      word: k.word,
-      isSelected: k.isSelected,
-      documentId: k.documentId,
-    })),
-    toc: tocWithKeywordRefs,
-  });
+      title: doc.title,
+      keywords: keywordRows.map((k) => ({
+        id: k.id,
+        word: k.word,
+        isSelected: k.status === "SELECTED",
+        documentId: doc.id,
+      })),
+      toc: tocWithKeywordRefs,
+    });
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.error("Analyze failed:", err);
+    const message = err?.message ?? "Unknown error";
+    if (typeof message === "string" && message.startsWith("LLM_ERROR:")) {
+      res.status(502).json({
+        error: "LLM_ERROR",
+        message: message.replace("LLM_ERROR:", "").trim(),
+      });
+      return;
+    }
+    res.status(500).json({
+      error: "ANALYZE_ERROR",
+      message,
+    });
+  }
 });
 
 router.get("/", async (_req, res) => {
   const docs = await db.select().from(documentsTable).orderBy(documentsTable.createdAt);
   
   const result = await Promise.all(docs.map(async (doc) => {
-    const kwCount = await db.select({ count: count() }).from(keywordsTable).where(eq(keywordsTable.documentId, doc.id));
+    const kwCount = await db
+      .select({ count: count() })
+      .from(keywordsTable)
+      .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+      .where(eq(sectionsTable.documentId, doc.id));
     const cardCount = await db
       .select({ count: count() })
-      .from(cardsTable)
-      .leftJoin(keywordsTable, eq(cardsTable.keywordId, keywordsTable.id))
-      .where(eq(keywordsTable.documentId, doc.id));
+      .from(flashcardsTable)
+      .leftJoin(keywordsTable, eq(flashcardsTable.sourceKeywordId, keywordsTable.id))
+      .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+      .where(eq(sectionsTable.documentId, doc.id));
     return {
       id: doc.id,
       title: doc.title,
@@ -167,13 +214,17 @@ router.get("/", async (_req, res) => {
 
 router.get("/:documentId/keywords", async (req, res) => {
   const documentId = req.params.documentId;
-  const keywords = await db.select().from(keywordsTable).where(eq(keywordsTable.documentId, documentId));
+  const keywords = await db
+    .select()
+    .from(keywordsTable)
+    .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+    .where(eq(sectionsTable.documentId, documentId));
   res.json({
-    keywords: keywords.map((k) => ({
-      id: k.id,
-      word: k.word,
-      isSelected: k.isSelected,
-      documentId: k.documentId,
+    keywords: keywords.map((row) => ({
+      id: row.keywords.id,
+      word: row.keywords.word,
+      isSelected: row.keywords.status === "SELECTED",
+      documentId: row.sections?.documentId,
     })),
   });
 });
@@ -182,21 +233,29 @@ router.put("/:documentId/keywords", async (req, res) => {
   const documentId = req.params.documentId;
   const body = UpdateKeywordSelectionsBody.parse(req.body);
 
-  const keywords = await db.select().from(keywordsTable).where(eq(keywordsTable.documentId, documentId));
-  
-  for (const kw of keywords) {
-    await db.update(keywordsTable)
-      .set({ isSelected: body.selectedIds.includes(kw.id) })
-      .where(eq(keywordsTable.id, kw.id));
-  }
+    const keywords = await db
+      .select({ id: keywordsTable.id })
+      .from(keywordsTable)
+      .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+      .where(eq(sectionsTable.documentId, documentId));
 
-  const updated = await db.select().from(keywordsTable).where(eq(keywordsTable.documentId, documentId));
+    for (const kw of keywords) {
+      await db.update(keywordsTable)
+        .set({ status: body.selectedIds.includes(kw.id) ? "SELECTED" : "PENDING" })
+        .where(eq(keywordsTable.id, kw.id));
+    }
+
+  const updated = await db
+    .select()
+    .from(keywordsTable)
+    .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+    .where(eq(sectionsTable.documentId, documentId));
   res.json({
-    keywords: updated.map((k) => ({
-      id: k.id,
-      word: k.word,
-      isSelected: k.isSelected,
-      documentId: k.documentId,
+    keywords: updated.map((row) => ({
+      id: row.keywords.id,
+      word: row.keywords.word,
+      isSelected: row.keywords.status === "SELECTED",
+      documentId: row.sections?.documentId,
     })),
   });
 });

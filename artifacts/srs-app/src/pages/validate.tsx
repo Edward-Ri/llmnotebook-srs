@@ -24,7 +24,7 @@ type ValidationState = {
   action: CardValidationItemAction;
   frontContent: string;
   backContent: string;
-  deckId?: number | null;
+  deckId?: string | null;
 };
 
 export default function Validate() {
@@ -44,9 +44,9 @@ export default function Validate() {
 
   const [cards, setCards] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [validations, setValidations] = useState<Record<number, ValidationState>>({});
+  const [validations, setValidations] = useState<Record<string, ValidationState>>({});
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedDeckId, setSelectedDeckId] = useState<number | null>(null);
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
 
   // Editable fields state
   const [editFront, setEditFront] = useState("");
@@ -89,7 +89,7 @@ export default function Validate() {
 
   const handleBatchSubmit = async () => {
     const payload = Object.entries(validations).map(([id, val]) => ({
-      id: parseInt(id),
+      id,
       action: val.action,
       frontContent: val.frontContent,
       backContent: val.backContent,
@@ -98,7 +98,7 @@ export default function Validate() {
     const assignments = Object.entries(validations)
       .filter(([, val]) => val.deckId !== undefined)
       .map(([id, val]) => ({
-        id: parseInt(id, 10),
+        id,
         deckId: val.deckId ?? null,
       }));
 
@@ -142,10 +142,7 @@ export default function Validate() {
       return;
     }
 
-    const numericId = Number(value);
-    if (!Number.isNaN(numericId)) {
-      setSelectedDeckId(numericId);
-    }
+    setSelectedDeckId(value);
   };
 
   if (isLoading) {

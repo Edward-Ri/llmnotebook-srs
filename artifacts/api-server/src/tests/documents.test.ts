@@ -30,16 +30,16 @@ function run() {
   ];
 
   const keywords = [
-    { id: 10, word: "AI" },
-    { id: 20, word: "LLM" },
-    { id: 30, word: "Absence" },
+    { id: "kw-10", word: "AI" },
+    { id: "kw-20", word: "LLM" },
+    { id: "kw-30", word: "Absence" },
   ];
 
   const enriched = attachKeywordsToToc(toc, paragraphs, keywords);
   assert.equal(enriched.length, 2);
   assert.deepEqual(enriched[0].keywords, [
-    { id: 10, word: "AI" },
-    { id: 20, word: "LLM" },
+    { id: "kw-10", word: "AI" },
+    { id: "kw-20", word: "LLM" },
   ]);
   assert.deepEqual(enriched[1].keywords, []);
 
@@ -58,15 +58,15 @@ function run() {
     },
   ];
   const expandedKeywords = [
-    { id: 40, word: "AI" },
-    { id: 50, word: "ai" },
+    { id: "kw-40", word: "AI" },
+    { id: "kw-50", word: "ai" },
   ];
 
   const twice = attachKeywordsToToc(expandedToc, expandedParagraphs, expandedKeywords);
   assert.equal(twice[0].keywords.length, 2);
   assert.deepEqual(twice[0].keywords, [
-    { id: 40, word: "AI" },
-    { id: 50, word: "ai" },
+    { id: "kw-40", word: "AI" },
+    { id: "kw-50", word: "ai" },
   ]);
 }
 

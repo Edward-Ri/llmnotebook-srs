@@ -8,5 +8,5 @@
 
 export interface GenerateCardsRequest {
   documentId: string;
-  keywordIds: number[];
+  keywordIds: string[];
 }

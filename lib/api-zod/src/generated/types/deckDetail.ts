@@ -8,7 +8,7 @@
 import type { DeckCard } from "./deckCard";
 
 export interface DeckDetail {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   createdAt: string;

@@ -7,7 +7,7 @@
  */
 
 export interface LogReviewRequest {
-  cardId: number;
+  cardId: string;
   /**
    * 0=完全遗忘, 1=困难, 2=一般, 3=轻松
    * @minimum 0

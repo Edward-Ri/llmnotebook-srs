@@ -6,19 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type DeckCard = {
-  id: number;
+  id: string;
   frontContent: string;
   backContent: string;
   status: string;
-  keywordId: number;
+  keywordId: string;
   keyword: string;
   dueDate?: string;
-  documentId?: number | null;
+  documentId?: string | null;
   documentTitle?: string | null;
 };
 
 type DeckDetailResponse = {
-  id: number;
+  id: string;
   name: string;
   description: string;
   createdAt: string;

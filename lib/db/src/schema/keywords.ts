@@ -1,13 +1,15 @@
-import { pgTable, serial, text, boolean, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { documentsTable } from "./documents";
+import { sectionsTable } from "./sections";
+import { textBlocksTable } from "./textBlocks";
 
 export const keywordsTable = pgTable("keywords", {
-  id: serial("id").primaryKey(),
-  documentId: uuid("document_id").notNull().references(() => documentsTable.id, { onDelete: "cascade" }),
-  word: text("word").notNull(),
-  isSelected: boolean("is_selected").notNull().default(false),
+  id: uuid("id").defaultRandom().primaryKey(),
+  sectionId: uuid("section_id").notNull().references(() => sectionsTable.id, { onDelete: "cascade" }),
+  textBlockId: uuid("text_block_id").references(() => textBlocksTable.id, { onDelete: "set null" }),
+  word: varchar("word", { length: 100 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("PENDING"),
 });
 
 export const insertKeywordSchema = createInsertSchema(keywordsTable).omit({ id: true });

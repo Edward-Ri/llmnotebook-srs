@@ -7,7 +7,7 @@
  */
 
 export interface Keyword {
-  id: number;
+  id: string;
   word: string;
   isSelected: boolean;
   documentId: string;

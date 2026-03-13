@@ -7,11 +7,11 @@
  */
 
 export interface DeckCard {
-  id: number;
+  id: string;
   frontContent: string;
   backContent: string;
   status: string;
-  keywordId: number;
+  keywordId: string;
   keyword?: string;
   dueDate?: string;
   documentId?: string;

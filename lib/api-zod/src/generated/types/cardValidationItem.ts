@@ -8,7 +8,7 @@
 import type { CardValidationItemAction } from "./cardValidationItemAction";
 
 export interface CardValidationItem {
-  id: number;
+  id: string;
   action: CardValidationItemAction;
   frontContent?: string;
   backContent?: string;

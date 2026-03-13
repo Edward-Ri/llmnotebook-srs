@@ -8,11 +8,11 @@
 import type { CardStatus } from "./cardStatus";
 
 export interface Card {
-  id: number;
+  id: string;
   frontContent: string;
   backContent: string;
   status: CardStatus;
-  keywordId: number;
+  keywordId: string;
   keyword?: string;
   sm2Interval?: number;
   sm2Repetition?: number;

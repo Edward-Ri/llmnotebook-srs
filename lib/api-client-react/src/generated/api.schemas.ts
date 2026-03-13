@@ -17,14 +17,14 @@ export interface AnalyzeDocumentRequest {
 }
 
 export interface Keyword {
-  id: number;
+  id: string;
   word: string;
   isSelected: boolean;
   documentId: string;
 }
 
 export interface TOCKeyword {
-  id: number;
+  id: string;
   word: string;
 }
 
@@ -49,11 +49,11 @@ export interface KeywordListResponse {
 }
 
 export interface UpdateKeywordsRequest {
-  selectedIds: number[];
+  selectedIds: string[];
 }
 
 export interface Document {
-  id: number;
+  id: string;
   title: string;
   content: string;
   createdAt: string;
@@ -67,7 +67,7 @@ export interface DocumentListResponse {
 
 export interface GenerateCardsRequest {
   documentId: string;
-  keywordIds: number[];
+  keywordIds: string[];
 }
 
 export type CardStatus = (typeof CardStatus)[keyof typeof CardStatus];
@@ -79,11 +79,11 @@ export const CardStatus = {
 } as const;
 
 export interface Card {
-  id: number;
+  id: string;
   frontContent: string;
   backContent: string;
   status: CardStatus;
-  keywordId: number;
+  keywordId: string;
   keyword?: string;
   sm2Interval?: number;
   sm2Repetition?: number;
@@ -106,7 +106,7 @@ export const CardValidationItemAction = {
 } as const;
 
 export interface CardValidationItem {
-  id: number;
+  id: string;
   action: CardValidationItemAction;
   frontContent?: string;
   backContent?: string;
@@ -123,7 +123,7 @@ export interface BatchValidationResponse {
 }
 
 export interface DeckSummary {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   createdAt: string;
@@ -137,11 +137,11 @@ export interface DeckListResponse {
 }
 
 export interface DeckCard {
-  id: number;
+  id: string;
   frontContent: string;
   backContent: string;
   status: string;
-  keywordId: number;
+  keywordId: string;
   keyword?: string;
   dueDate?: string;
   documentId?: string;
@@ -149,7 +149,7 @@ export interface DeckCard {
 }
 
 export interface DeckDetail {
-  id: number;
+  id: string;
   name: string;
   description?: string;
   createdAt: string;
@@ -165,8 +165,8 @@ export interface CreateDeckRequest {
 }
 
 export type BatchAssignDeckRequestAssignmentsItem = {
-  id: number;
-  deckId?: number | null;
+  id: string;
+  deckId?: string | null;
 };
 
 export interface BatchAssignDeckRequest {
@@ -184,7 +184,7 @@ export interface DueCardsResponse {
 }
 
 export interface LogReviewRequest {
-  cardId: number;
+  cardId: string;
   /**
    * 0=完全遗忘, 1=困难, 2=一般, 3=轻松
    * @minimum 0

@@ -19,7 +19,7 @@ import {
 type Stage = "input" | "keywords" | "generating";
 
 interface Keyword {
-  id: number;
+  id: string;
   word: string;
   isSelected: boolean;
   isCore?: boolean;
@@ -64,7 +64,7 @@ function flattenToc(nodes: TOCNode[]): TOCNode[] {
 /* ─────────────────────────────────────────────
    Utility: count occurrences + get first context
 ───────────────────────────────────────────── */
-function enrichKeywords(keywords: { id: number; word: string; isSelected: boolean }[], content: string): Keyword[] {
+function enrichKeywords(keywords: { id: string; word: string; isSelected: boolean }[], content: string): Keyword[] {
   return keywords.map((kw) => {
     const regex = new RegExp(kw.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     const matches = [...content.matchAll(regex)];
@@ -91,8 +91,8 @@ function HighlightedText({
 }: {
   content: string;
   keywords: Keyword[];
-  hoveredKeyword: number | null;
-  activeKeyword: number | null;
+  hoveredKeyword: string | null;
+  activeKeyword: string | null;
 }) {
   const selectedWords = keywords.filter((k) => k.isSelected).map((k) => k.word);
   const hoveredWord = keywords.find((k) => k.id === hoveredKeyword)?.word ?? null;
@@ -234,8 +234,8 @@ export default function Analyze() {
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [toc, setToc] = useState<TOCNode[]>([]);
   const [openSections, setOpenSections] = useState<string[]>([]);
-  const [hoveredKeyword, setHoveredKeyword] = useState<number | null>(null);
-  const [activeKeyword, setActiveKeyword] = useState<number | null>(null);
+  const [hoveredKeyword, setHoveredKeyword] = useState<string | null>(null);
+  const [activeKeyword, setActiveKeyword] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -320,17 +320,17 @@ export default function Analyze() {
   };
 
   /* ── Keyword sidebar actions ── */
-  const toggleKeyword = (id: number) =>
+  const toggleKeyword = (id: string) =>
     setKeywords((prev) => prev.map((k) => (k.id === id ? { ...k, isSelected: !k.isSelected } : k)));
 
-  const toggleCore = (id: number) =>
+  const toggleCore = (id: string) =>
     setKeywords((prev) => prev.map((k) => (k.id === id ? { ...k, isCore: !k.isCore } : k)));
 
-  const excludeKeyword = (id: number) =>
+  const excludeKeyword = (id: string) =>
     setKeywords((prev) => prev.map((k) => (k.id === id ? { ...k, isSelected: false } : k)));
 
   /* ── Click on sidebar item → scroll left panel ── */
-  const handleKeywordClick = (id: number) => {
+  const handleKeywordClick = (id: string) => {
     setActiveKeyword(id);
     setTimeout(() => {
       const el = textRef.current?.querySelector(`#kw-first-${id}`);

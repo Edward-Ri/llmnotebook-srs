@@ -7,5 +7,5 @@
  */
 
 export interface UpdateKeywordsRequest {
-  selectedIds: number[];
+  selectedIds: string[];
 }

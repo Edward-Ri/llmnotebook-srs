@@ -4,7 +4,7 @@ import type { TOCNode, TOCKeyword } from "./physicalChunking";
 export function attachKeywordsToToc(
   toc: TOCNode[],
   paragraphs: Paragraph[],
-  keywords: { id: number; word: string }[],
+  keywords: { id: string; word: string }[],
 ): TOCNode[] {
   const loweredKeywords = keywords.map((keyword) => ({
     ...keyword,
@@ -24,7 +24,7 @@ export function attachKeywordsToToc(
       .join(" ")
       .toLowerCase();
 
-    const matched = new Map<number, TOCKeyword>();
+    const matched = new Map<string, TOCKeyword>();
 
     for (const keyword of loweredKeywords) {
       if (!keyword.lower) continue;

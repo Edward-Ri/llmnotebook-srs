@@ -7,6 +7,6 @@
  */
 
 export type BatchAssignDeckRequestAssignmentsItem = {
-  id: number;
-  deckId?: number | null;
+  id: string;
+  deckId?: string | null;
 };

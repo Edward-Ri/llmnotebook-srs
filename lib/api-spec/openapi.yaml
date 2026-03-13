@@ -333,7 +333,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         word:
           type: string
         isSelected:
@@ -361,7 +362,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         word:
           type: string
       required:
@@ -401,7 +403,8 @@ components:
         selectedIds:
           type: array
           items:
-            type: integer
+            type: string
+            format: uuid
       required:
         - selectedIds
 
@@ -409,7 +412,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         title:
           type: string
         content:
@@ -445,7 +449,8 @@ components:
         keywordIds:
           type: array
           items:
-            type: integer
+            type: string
+            format: uuid
       required:
         - documentId
         - keywordIds
@@ -454,7 +459,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         frontContent:
           type: string
         backContent:
@@ -463,7 +469,8 @@ components:
           type: string
           enum: [pending_validation, active, discarded]
         keywordId:
-          type: integer
+          type: string
+          format: uuid
         keyword:
           type: string
         sm2Interval:
@@ -498,7 +505,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         action:
           type: string
           enum: [keep, edit, discard]
@@ -538,7 +546,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         name:
           type: string
         description:
@@ -573,7 +582,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         frontContent:
           type: string
         backContent:
@@ -581,7 +591,8 @@ components:
         status:
           type: string
         keywordId:
-          type: integer
+          type: string
+          format: uuid
         keyword:
           type: string
         dueDate:
@@ -602,7 +613,8 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
         name:
           type: string
         description:
@@ -647,9 +659,11 @@ components:
             type: object
             properties:
               id:
-                type: integer
+                type: string
+                format: uuid
               deckId:
-                type: integer
+                type: string
+                format: uuid
                 nullable: true
             required:
               - id
@@ -684,7 +698,8 @@ components:
       type: object
       properties:
         cardId:
-          type: integer
+          type: string
+          format: uuid
         grade:
           type: integer
           minimum: 0
