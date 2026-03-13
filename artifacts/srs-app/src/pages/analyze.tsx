@@ -1,9 +1,20 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { Wand2, Check, Star, X, ChevronRight, Upload, FileText } from "lucide-react";
-import { useAnalyzeDocument, useUpdateKeywordSelections, useGenerateCards } from "@workspace/api-client-react";
+import {
+  useAnalyzeDocument,
+  useUpdateKeywordSelections,
+  useGenerateCards,
+  type TOCNode,
+} from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 type Stage = "input" | "keywords" | "generating";
 
@@ -14,6 +25,40 @@ interface Keyword {
   isCore?: boolean;
   count?: number;
   context?: string;
+}
+
+type ParagraphBlock = {
+  index: number;
+  content: string;
+};
+
+function normalizeParagraphs(text: string): ParagraphBlock[] {
+  if (!text) return [];
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n");
+  const blocks: ParagraphBlock[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length < 5) continue;
+    blocks.push({ index: blocks.length, content: trimmed });
+  }
+
+  return blocks;
+}
+
+function flattenToc(nodes: TOCNode[]): TOCNode[] {
+  const result: TOCNode[] = [];
+
+  const walk = (items: TOCNode[]) => {
+    for (const node of items) {
+      result.push(node);
+      if (node.children?.length) walk(node.children);
+    }
+  };
+
+  walk(nodes);
+  return result;
 }
 
 /* ─────────────────────────────────────────────
@@ -187,6 +232,8 @@ export default function Analyze() {
   const [content, setContent] = useState("");
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [toc, setToc] = useState<TOCNode[]>([]);
+  const [openSections, setOpenSections] = useState<string[]>([]);
   const [hoveredKeyword, setHoveredKeyword] = useState<number | null>(null);
   const [activeKeyword, setActiveKeyword] = useState<number | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -198,6 +245,40 @@ export default function Analyze() {
   const analyzeDocMutation = useAnalyzeDocument();
   const updateKeywordsMutation = useUpdateKeywordSelections();
   const generateCardsMutation = useGenerateCards();
+
+  const paragraphs = useMemo(() => normalizeParagraphs(content), [content]);
+  const keywordMap = useMemo(
+    () => new Map(keywords.map((k) => [k.id, k])),
+    [keywords]
+  );
+  const tocIndex = useMemo(() => {
+    const map = new Map<string, TOCNode>();
+    for (const node of flattenToc(toc)) {
+      map.set(node.id, node);
+    }
+    return map;
+  }, [toc]);
+
+  const scrollToSection = useCallback(
+    (sectionId: string) => {
+      const node = tocIndex.get(sectionId);
+      if (!node) return;
+      const anchor = document.getElementById(`para-${node.startIndex}`);
+      anchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    [tocIndex]
+  );
+
+  const handleSectionChange = useCallback(
+    (values: string[]) => {
+      setOpenSections((prev) => {
+        const newlyOpened = values.find((value) => !prev.includes(value));
+        if (newlyOpened) scrollToSection(newlyOpened);
+        return values;
+      });
+    },
+    [scrollToSection]
+  );
 
   /* ── Drag & drop ── */
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -226,6 +307,8 @@ export default function Analyze() {
       });
       setDocumentId(res.documentId);
       setKeywords(enrichKeywords(res.keywords, content));
+      setToc(res.toc ?? []);
+      setOpenSections([]);
       // small delay so skeleton shows
       await new Promise((r) => setTimeout(r, 400));
       setStage("keywords");
@@ -384,7 +467,7 @@ export default function Analyze() {
           </motion.div>
         )}
 
-        {/* ════ STAGE 2: KEYWORDS (split layout) ════ */}
+        {/* ════ STAGE 2: KEYWORDS (NotebookLM layout) ════ */}
         {stage === "keywords" && (
           <motion.div
             key="keywords"
@@ -392,58 +475,146 @@ export default function Analyze() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="flex-1 flex overflow-hidden"
+            className="flex-1 grid grid-cols-1 lg:grid-cols-[3fr_2fr] overflow-hidden bg-[#fafafa]"
           >
             {/* LEFT: original text with highlights */}
-            <div ref={textRef} className="flex-1 overflow-y-auto px-10 py-8 border-r border-gray-100">
-              <div className="max-w-2xl mx-auto">
-                <h2 className="text-xl font-bold text-[#37352f] mb-1">{title || "文档内容"}</h2>
-                <p className="text-xs text-gray-400 mb-6">
-                  {keywords.filter((k) => k.isSelected).length} 个知识点已高亮
-                </p>
-                <HighlightedText
-                  content={content}
-                  keywords={keywords}
-                  hoveredKeyword={hoveredKeyword}
-                  activeKeyword={activeKeyword}
-                />
+            <div ref={textRef} className="overflow-y-auto px-10 py-8 border-r border-gray-100">
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-[#37352f] mb-1">{title || "文档内容"}</h2>
+                  <p className="text-xs text-gray-400">
+                    {keywords.filter((k) => k.isSelected).length} 个知识点已高亮
+                  </p>
+                </div>
+
+                {paragraphs.length > 0 ? (
+                  <div className="space-y-5">
+                    {paragraphs.map((block) => (
+                      <div
+                        key={block.index}
+                        id={`para-${block.index}`}
+                        className="scroll-mt-24"
+                      >
+                        <HighlightedText
+                          content={block.content}
+                          keywords={keywords}
+                          hoveredKeyword={hoveredKeyword}
+                          activeKeyword={activeKeyword}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <HighlightedText
+                    content={content}
+                    keywords={keywords}
+                    hoveredKeyword={hoveredKeyword}
+                    activeKeyword={activeKeyword}
+                  />
+                )}
               </div>
             </div>
 
-            {/* RIGHT: keyword sidebar */}
-            <div className="w-[340px] shrink-0 flex flex-col bg-white border-l border-gray-100 shadow-[-4px_0_20px_rgba(0,0,0,0.03)]">
-              {/* Sidebar header */}
-              <div className="px-5 pt-6 pb-3 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-0.5">
-                  <h3 className="text-sm font-semibold text-[#37352f]">提取的知识点</h3>
+            {/* RIGHT: TOC + keyword panel */}
+            <div className="flex flex-col overflow-y-auto bg-white border-l border-gray-100 shadow-[-4px_0_20px_rgba(0,0,0,0.03)]">
+              <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100 px-6 py-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-[#37352f]">结构与关键词</h3>
                   <span className="text-xs text-[#6366f1] font-medium bg-[#f0f0ff] px-2 py-0.5 rounded-full">
                     已选 {selectedCount} / {keywords.length}
                   </span>
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1">鼠标悬停可在原文中定位，点击可聚焦跳转</p>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  展开章节查看关键词，点击章节可定位左侧原文段落
+                </p>
               </div>
 
-              {/* Keyword list */}
-              <div className="flex-1 overflow-y-auto py-2">
-                {isLoading
-                  ? Array.from({ length: 8 }).map((_, i) => <SkeletonItem key={i} />)
-                  : keywords.map((kw) => (
-                    <KeywordRow
-                      key={kw.id}
-                      kw={kw}
-                      isHovered={hoveredKeyword === kw.id}
-                      onHover={() => setHoveredKeyword(kw.id)}
-                      onLeave={() => setHoveredKeyword(null)}
-                      onClick={() => handleKeywordClick(kw.id)}
-                      onToggle={() => toggleKeyword(kw.id)}
-                      onCore={() => toggleCore(kw.id)}
-                      onExclude={() => excludeKeyword(kw.id)}
-                    />
-                  ))}
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                {isLoading && (
+                  <div className="space-y-2">
+                    {Array.from({ length: 6 }).map((_, i) => <SkeletonItem key={i} />)}
+                  </div>
+                )}
+
+                {!isLoading && toc.length === 0 && (
+                  <div className="text-xs text-gray-400 px-2 py-6 text-center">
+                    暂无目录结构，请返回重新解析文本。
+                  </div>
+                )}
+
+                {!isLoading && toc.length > 0 && (
+                  <Accordion
+                    type="multiple"
+                    value={openSections}
+                    onValueChange={handleSectionChange}
+                    className="w-full"
+                  >
+                    {toc.map((node) => (
+                      <AccordionItem
+                        key={node.id}
+                        value={node.id}
+                        className="border-b border-gray-100"
+                      >
+                        <AccordionTrigger className="py-3 text-[13px] font-semibold text-[#37352f] hover:no-underline">
+                          <div className="flex-1 flex items-center justify-between gap-3">
+                            <div className="flex flex-col text-left">
+                              <span>{node.title}</span>
+                              <span className="text-[11px] text-gray-400">
+                                段落 {node.startIndex + 1} - {node.endIndex + 1}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                              {node.keywords.length} 个关键词
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-0 pb-3">
+                          {node.keywords.length === 0 ? (
+                            <div className="text-[11px] text-gray-400 px-2 py-2">
+                              本章节暂无可用关键词
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2 px-2 pb-2">
+                              {node.keywords.map((kw) => {
+                                const state = keywordMap.get(kw.id);
+                                const selected = state?.isSelected ?? false;
+                                return (
+                                  <button
+                                    key={kw.id}
+                                    type="button"
+                                    onMouseEnter={() => setHoveredKeyword(kw.id)}
+                                    onMouseLeave={() => setHoveredKeyword(null)}
+                                    onClick={() => {
+                                      toggleKeyword(kw.id);
+                                      handleKeywordClick(kw.id);
+                                    }}
+                                    className={[
+                                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all",
+                                      selected
+                                        ? "border-[#6366f1] bg-[#eef2ff] text-[#4338ca]"
+                                        : "border-gray-200 bg-white text-gray-500 hover:border-[#6366f1]/40 hover:text-[#4338ca]",
+                                    ].join(" ")}
+                                  >
+                                    <span
+                                      className={[
+                                        "inline-flex h-2 w-2 rounded-full",
+                                        selected ? "bg-[#6366f1]" : "bg-gray-300",
+                                      ].join(" ")}
+                                    />
+                                    {kw.word}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
               </div>
 
-              {/* Sidebar footer CTA */}
-              <div className="px-5 py-4 border-t border-gray-100 bg-white">
+              <div className="px-6 py-4 border-t border-gray-100 bg-white">
                 <button
                   onClick={handleGenerateCards}
                   disabled={selectedCount === 0}
