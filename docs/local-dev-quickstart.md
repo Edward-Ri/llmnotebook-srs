@@ -11,6 +11,7 @@
 - **Node**: 使用 `nvm` 切到 Node 20（例如 20.20.1）
 - **包管理器**: 必须使用 `pnpm`
 - **数据库**: 本机已安装并启动 PostgreSQL，默认监听 `localhost:5432`
+- **LLM**: 需要配置 `DEEPSEEK_API_KEY`（DeepSeek/OpenAI 兼容接口）
 
 在任意新终端中先执行：
 
@@ -42,6 +43,7 @@ GRANT ALL PRIVILEGES ON DATABASE srs_db TO srs_user;
 
 ```bash
 export DATABASE_URL="postgresql://srs_user:srs_password@localhost:5432/srs_db"
+export DEEPSEEK_API_KEY="your_api_key_here"
 ```
 
 ### 文本材料相关表：`documents` 与 `text_blocks`
@@ -68,6 +70,7 @@ nvm use 20
 export DATABASE_URL="postgresql://srs_user:srs_password@localhost:5432/srs_db"
 export PORT=4000
 export JWT_SECRET="dev-secret-change-me"
+export DEEPSEEK_API_KEY="your_api_key_here"
 
 cd artifacts/api-server
 pnpm dev
@@ -117,4 +120,3 @@ http://localhost:5173/
 ```
 
 若页面正常加载且无构建时报错，即表示数据库、后端与前端已在本地成功联动运行。
-

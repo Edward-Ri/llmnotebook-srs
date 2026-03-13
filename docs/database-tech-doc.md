@@ -30,11 +30,11 @@
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
-| id | serial | PK | 自增主键 |
+| id | uuid | PK | 文档 ID（默认 `gen_random_uuid()`） |
 | user_id | integer | FK → users.id, 可空 | 所属用户，未登录可为 null |
-| title | text | NOT NULL, default '未命名文档' | 标题 |
-| content | text | NOT NULL | 正文内容 |
+| title | varchar(255) | NOT NULL | 标题 |
 | created_at | timestamp | NOT NULL, default now() | 创建时间 |
+| updated_at | timestamp | NOT NULL, default now() | 更新时间 |
 
 - **Zod**：`insertDocumentSchema`（插入时省略 id、createdAt），类型 `InsertDocument`、`Document`。
 
@@ -43,7 +43,7 @@
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | serial | PK | 自增主键 |
-| document_id | integer | NOT NULL, FK → documents.id | 所属文档 |
+| document_id | uuid | NOT NULL, FK → documents.id | 所属文档 |
 | word | text | NOT NULL | 关键词文本 |
 | is_selected | boolean | NOT NULL, default false | 用户是否勾选参与生成卡片 |
 
@@ -79,7 +79,7 @@
 
 - **Zod**：`insertReviewLogSchema`（插入时省略 id、createdAt），类型 `InsertReviewLog`、`ReviewLog`。
 
-> 以上 3.1–3.5 为当前 Drizzle schema 中仍在使用的“旧版学习流”表结构（基于 int/serial 主键）。
+> 以上 3.1–3.5 为当前 Drizzle schema 中仍在使用的“旧版学习流”表结构，其中 `documents` 已迁移为 uuid 主键，而 `cards/review_logs` 仍使用 serial 主键。
 
 ### 4. 阅读材料与 Flashcards（PostgreSQL 层）
 
@@ -135,8 +135,8 @@
   - `idx_sections_start_block_index`：`start_block_index`
   - `idx_sections_end_block_index`：`end_block_index`
 
-> 说明：当前 API 层已经在 `artifacts/api-server/src/utils/physicalChunking.ts` 中提供了基于纯文本的物理切分与 Section 原型划分、TOC 构建工具（`physicalChunk` / `segmentSections` / `buildTocTree`）。  
-> 后续会将这些工具与本节所述的 `documents` / `text_blocks` / `sections` 表结构进一步对齐，使应用层的 Section/TOC 结构能够直接落盘在 PostgreSQL 层。
+> 说明：当前 API 层已经在 `artifacts/api-server/src/utils/physicalChunking.ts` 中提供了基于纯文本的物理切分与 Section 原型划分、TOC 构建工具（`physicalChunk` / `segmentSections` / `buildTocTree`），并在 `POST /api/documents/analyze` 中写入 `documents` / `text_blocks` / `sections`。  
+> 关键词仍写入 Drizzle 的 `keywords`（按 `document_id` 归档），与 SQL 层 `keywords`（按 `section_id`）存在结构差异，后续可再统一。
 
 #### 4.3 关键词：`keywords`
 

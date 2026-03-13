@@ -89,3 +89,12 @@
 - 对应测试：`artifacts/api-server/src/tests/physicalChunking.test.ts`
   - 覆盖文本物理切分、Section 分段，以及 `buildTocTree` 的基础行为，保证日志中描述的行为在代码中有可回归的测试。
   - 相关提交：`feat(api): add basic TOC tree builder`
+
+### 6. API 层对接进展（补充）
+
+- `POST /api/documents/analyze` 已接入 DeepSeek（OpenAI 兼容接口）进行分段关键词提取。
+- 文档解析流程会写入：
+  - `documents`（uuid 主键）
+  - `text_blocks`（按 `position_index` 保存段落）
+  - `sections`（按固定窗口生成的原型分段）
+- 关键词目前仍落在 Drizzle 的 `keywords` 表（按 `document_id`），用于前端筛选与生成卡片；与 SQL 层 `keywords(section_id)` 的结构差异后续再统一。
