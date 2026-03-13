@@ -9,6 +9,15 @@ export type Section = {
   endIndex: number;
 };
 
+export type TOCNode = {
+  id: string;
+  title: string;
+  startIndex: number;
+  endIndex: number;
+  children: TOCNode[];
+  keywords: string[];
+};
+
 export function physicalChunk(cleanText: string): Paragraph[] {
   if (!cleanText) return [];
 
@@ -45,5 +54,41 @@ export function segmentSections(blocks: Paragraph[]): Section[] {
   }
 
   return sections;
+}
+
+export function buildTocTree(sections: Section[], blocks: Paragraph[]): TOCNode[] {
+  const toc: TOCNode[] = [];
+
+  for (const section of sections) {
+    const startIndex = Math.max(0, section.startIndex);
+    const endIndex = Math.min(section.endIndex, blocks.length - 1);
+
+    if (blocks.length === 0 || startIndex > endIndex) {
+      toc.push({
+        id: String(section.id),
+        title: `Section ${section.id}`,
+        startIndex: section.startIndex,
+        endIndex: section.endIndex,
+        children: [],
+        keywords: [],
+      });
+      continue;
+    }
+
+    const firstBlock = blocks[startIndex];
+    const rawTitle = firstBlock?.content ?? `Section ${section.id}`;
+    const truncatedTitle = rawTitle.length > 80 ? `${rawTitle.slice(0, 77)}...` : rawTitle;
+
+    toc.push({
+      id: String(section.id),
+      title: truncatedTitle,
+      startIndex,
+      endIndex,
+      children: [],
+      keywords: [],
+    });
+  }
+
+  return toc;
 }
 

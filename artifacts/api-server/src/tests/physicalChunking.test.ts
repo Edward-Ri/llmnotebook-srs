@@ -5,6 +5,7 @@ import {
   type Paragraph,
   type Section,
 } from "../utils/physicalChunking";
+import type { TOCNode } from "../utils/physicalChunking";
 
 function run() {
   // Basic splitting and indexing
@@ -139,6 +140,43 @@ function run() {
     ];
 
     assert.deepEqual(sections, expected);
+  }
+
+  // TOC building: each section becomes a single root node with title from first block
+  {
+    const blocks: Paragraph[] = Array.from({ length: 5 }, (_, index) => ({
+      index,
+      content: `Paragraph ${index}`,
+    }));
+
+    const sections: Section[] = segmentSections(blocks);
+
+    const toc: TOCNode[] = [];
+
+    // simple inlined expectation to avoid tight coupling to implementation details
+    for (const section of sections) {
+      const firstBlock = blocks[section.startIndex];
+      const title = firstBlock?.content ?? `Section ${section.id}`;
+
+      toc.push({
+        id: String(section.id),
+        title,
+        startIndex: section.startIndex,
+        endIndex: section.endIndex,
+        children: [],
+        keywords: [],
+      });
+    }
+
+    // call the real implementation and compare structure
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { buildTocTree } = require("../utils/physicalChunking") as {
+      buildTocTree: (sections: Section[], blocks: Paragraph[]) => TOCNode[];
+    };
+
+    const actual = buildTocTree(sections, blocks);
+
+    assert.deepEqual(actual, toc);
   }
 }
 
