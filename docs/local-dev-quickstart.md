@@ -44,6 +44,16 @@ GRANT ALL PRIVILEGES ON DATABASE srs_db TO srs_user;
 export DATABASE_URL="postgresql://srs_user:srs_password@localhost:5432/srs_db"
 ```
 
+### 文本材料相关表：`documents` 与 `text_blocks`
+
+- `documents` 表代表一篇阅读材料或文档。
+- `text_blocks` 表代表该文档拆分后的「文本块」，用于精细化分析与排序：
+  - **一对多关系**：一行 `documents` 可以关联多行 `text_blocks`（`text_blocks.document_id` 外键指向 `documents.id`，并配置了 `ON DELETE CASCADE`，删除文档会自动删除其下所有文本块）。
+  - **顺序语义**：`text_blocks.position_index` 表示文本块在文档中的顺序，从 0 或 1 开始连续递增（实际起始值由上游切分逻辑决定，但必须在同一文档内保持严格单调递增以反映真实顺序）。
+  - **唯一性约束**：同一文档内 `(document_id, position_index)` 组合是唯一的，数据库层会拒绝插入或更新到重复的 `position_index`，以保证单个文档的块顺序不会出现「两块占用同一位置」的情况。
+
+开发时如果需要根据顺序读取某个文档的所有文本块，应按 `position_index` 升序查询指定 `document_id` 的所有 `text_blocks` 记录。
+
 ---
 
 ## 3. 启动后端 API（终端 A）
