@@ -6,6 +6,12 @@ import {
   AnalyzeDocumentBody,
   UpdateKeywordSelectionsBody,
 } from "@workspace/api-zod";
+import {
+  buildTocTree,
+  physicalChunk,
+  segmentSections,
+} from "../utils/physicalChunking";
+import { attachKeywordsToToc } from "../utils/toc-keywords";
 
 const router: IRouter = Router();
 
@@ -47,7 +53,11 @@ function extractKeywords(text: string): string[] {
 
 router.post("/analyze", async (req, res) => {
   const body = AnalyzeDocumentBody.parse(req.body);
-  
+
+  const paragraphs = physicalChunk(body.content);
+  const sections = segmentSections(paragraphs);
+  const tocTree = buildTocTree(sections, paragraphs);
+
   const authUser = (req as any).authUser as { userId: number } | undefined;
   const [doc] = await db.insert(documentsTable).values({
     title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
@@ -64,6 +74,8 @@ router.post("/analyze", async (req, res) => {
     }))
   ).returning();
 
+  const tocWithKeywordRefs = attachKeywordsToToc(tocTree, paragraphs, keywordRows);
+
   res.json({
     documentId: doc.id,
     title: doc.title,
@@ -73,6 +85,7 @@ router.post("/analyze", async (req, res) => {
       isSelected: k.isSelected,
       documentId: k.documentId,
     })),
+    toc: tocWithKeywordRefs,
   });
 });
 

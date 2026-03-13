@@ -76,3 +76,16 @@
   - `feat(db): add keywords and decks sql tables`
   - `feat(db): add flashcards table`
 - 当前分支：`feat/notebooklm-layout-and-auth`（已推送至远端 `origin`）。
+
+### 5. API 层与文本切分 / Section 工具更新
+
+- 新增后端工具文件：`artifacts/api-server/src/utils/physicalChunking.ts`
+  - `physicalChunk(cleanText: string): Paragraph[]`
+    - 将原始长文本按行进行“物理切分”，过滤掉过短/空行，为后续 Section 划分与 TOC 构建提供基础 `blocks`。
+  - `segmentSections(blocks: Paragraph[]): Section[]`
+    - 目前按固定窗口（每 4 个段落一组）生成物理 `sections`，用于原型阶段的段落分段。
+  - `buildTocTree(sections: Section[], blocks: Paragraph[]): TOCNode[]`
+    - 基于 `sections` 和 `blocks` 生成最小可用的 TOC 树结构：暂时为“每个 section 一个根节点，标题取自该 section 第一个段落内容”的实现，为后续引入更精细的 heading/level 解析算法打基础。
+- 对应测试：`artifacts/api-server/src/tests/physicalChunking.test.ts`
+  - 覆盖文本物理切分、Section 分段，以及 `buildTocTree` 的基础行为，保证日志中描述的行为在代码中有可回归的测试。
+  - 相关提交：`feat(api): add basic TOC tree builder`

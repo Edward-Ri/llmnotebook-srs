@@ -135,6 +135,9 @@
   - `idx_sections_start_block_index`：`start_block_index`
   - `idx_sections_end_block_index`：`end_block_index`
 
+> 说明：当前 API 层已经在 `artifacts/api-server/src/utils/physicalChunking.ts` 中提供了基于纯文本的物理切分与 Section 原型划分、TOC 构建工具（`physicalChunk` / `segmentSections` / `buildTocTree`）。  
+> 后续会将这些工具与本节所述的 `documents` / `text_blocks` / `sections` 表结构进一步对齐，使应用层的 Section/TOC 结构能够直接落盘在 PostgreSQL 层。
+
 #### 4.3 关键词：`keywords`
 
 定义位置：`lib/db/sql/keywords-add.sql`

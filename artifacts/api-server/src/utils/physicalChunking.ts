@@ -9,13 +9,18 @@ export type Section = {
   endIndex: number;
 };
 
+export type TOCKeyword = {
+  id: number;
+  word: string;
+};
+
 export type TOCNode = {
   id: string;
   title: string;
   startIndex: number;
   endIndex: number;
   children: TOCNode[];
-  keywords: string[];
+  keywords: TOCKeyword[];
 };
 
 export function physicalChunk(cleanText: string): Paragraph[] {
@@ -91,4 +96,3 @@ export function buildTocTree(sections: Section[], blocks: Paragraph[]): TOCNode[
 
   return toc;
 }
-

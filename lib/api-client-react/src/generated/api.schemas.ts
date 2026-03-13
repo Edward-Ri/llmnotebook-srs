@@ -23,10 +23,25 @@ export interface Keyword {
   documentId: string;
 }
 
+export interface TOCKeyword {
+  id: number;
+  word: string;
+}
+
+export interface TOCNode {
+  id: string;
+  title: string;
+  startIndex: number;
+  endIndex: number;
+  children: TOCNode[];
+  keywords: TOCKeyword[];
+}
+
 export interface AnalyzeDocumentResponse {
   documentId: string;
   title?: string;
   keywords: Keyword[];
+  toc: TOCNode[];
 }
 
 export interface KeywordListResponse {

@@ -10,19 +10,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BrainCircuit, LayoutDashboard, FileText, CheckSquare, Brain, BarChart3, Plus } from "lucide-react";
+import { BrainCircuit, LayoutDashboard, CheckSquare, Brain, BarChart3, Plus } from "lucide-react";
 
 import { AuthProvider } from "@/contexts/AuthContext";
 import { useCreateDeck } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
-import Analyze from "@/pages/analyze";
 import Validate from "@/pages/validate";
 import Review from "@/pages/review";
 import Analytics from "@/pages/analytics";
 import MaterialDetail from "@/pages/material-detail";
 import DeckDetail from "@/pages/deck-detail";
+import NewMaterialNotebook from "@/pages/material-new";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,7 +35,6 @@ const queryClient = new QueryClient({
 
 const NAV_ITEMS = [
   { title: "总览面板", url: "/", icon: LayoutDashboard },
-  { title: "文档解析", url: "/analyze", icon: FileText },
   { title: "卡片校验", url: "/validate", icon: CheckSquare },
   { title: "间隔复习", url: "/review", icon: Brain },
   { title: "学习分析", url: "/analytics", icon: BarChart3 },
@@ -115,7 +114,7 @@ function TopNav() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
-              <Link href="/analyze">新建阅读材料</Link>
+              <Link href="/materials/new">新建阅读材料</Link>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleCreateDeck}>
               新建卡片组
@@ -131,7 +130,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/analyze" component={Analyze} />
+      <Route path="/materials/new" component={NewMaterialNotebook} />
       <Route path="/materials/:id" component={MaterialDetail} />
       <Route path="/decks/:id" component={DeckDetail} />
       <Route path="/validate" component={Validate} />

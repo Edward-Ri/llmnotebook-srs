@@ -110,9 +110,6 @@ export default function MaterialDetail() {
                 <Button className="w-full mt-2" asChild>
                   <Link href={`/validate?documentId=${id}`}>跳转到卡片校验</Link>
                 </Button>
-                <Button className="w-full" variant="outline" asChild>
-                  <Link href="/analyze">从其它材料继续解析</Link>
-                </Button>
               </div>
             </section>
           </div>

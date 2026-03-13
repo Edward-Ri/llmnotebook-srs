@@ -36,5 +36,7 @@ export * from "./keyword";
 export * from "./keywordListResponse";
 export * from "./logReviewRequest";
 export * from "./reviewLogResponse";
+export * from "./tOCKeyword";
+export * from "./tOCNode";
 export * from "./updateKeywordsRequest";
 export * from "./validateCardsBatchRequest";

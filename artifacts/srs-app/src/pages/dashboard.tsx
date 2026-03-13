@@ -138,7 +138,7 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             <Button size="sm" variant="outline" asChild>
-              <Link href="/analyze">添加阅读材料</Link>
+              <Link href="/materials/new">添加阅读材料</Link>
             </Button>
             <Button size="sm" asChild>
               <Link href="/review">开始今日复习</Link>

@@ -320,9 +320,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Keyword"
+        toc:
+          type: array
+          items:
+            $ref: "#/components/schemas/TOCNode"
       required:
         - documentId
         - keywords
+        - toc
 
     Keyword:
       type: object
@@ -350,6 +355,44 @@ components:
           items:
             $ref: "#/components/schemas/Keyword"
       required:
+        - keywords
+
+    TOCKeyword:
+      type: object
+      properties:
+        id:
+          type: integer
+        word:
+          type: string
+      required:
+        - id
+        - word
+
+    TOCNode:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        startIndex:
+          type: integer
+        endIndex:
+          type: integer
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/TOCNode"
+        keywords:
+          type: array
+          items:
+            $ref: "#/components/schemas/TOCKeyword"
+      required:
+        - id
+        - title
+        - startIndex
+        - endIndex
+        - children
         - keywords
 
     UpdateKeywordsRequest:

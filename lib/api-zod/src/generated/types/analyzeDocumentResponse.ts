@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Keyword } from "./keyword";
+import type { TOCNode } from "./tOCNode";
 
 export interface AnalyzeDocumentResponse {
   documentId: string;
   title?: string;
   keywords: Keyword[];
+  toc: TOCNode[];
 }

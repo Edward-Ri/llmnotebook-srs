@@ -33,6 +33,21 @@ export const AnalyzeDocumentResponse = zod.object({
       documentId: zod.string().uuid(),
     }),
   ),
+  toc: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      startIndex: zod.number(),
+      endIndex: zod.number(),
+      children: zod.array(zod.unknown()),
+      keywords: zod.array(
+        zod.object({
+          id: zod.number(),
+          word: zod.string(),
+        }),
+      ),
+    }),
+  ),
 });
 
 /**

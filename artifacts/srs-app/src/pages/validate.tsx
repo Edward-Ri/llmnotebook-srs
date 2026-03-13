@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import {
   useGetPendingCards,
   useValidateCardsBatch,
@@ -27,6 +28,7 @@ type ValidationState = {
 };
 
 export default function Validate() {
+  const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const documentIdParam = searchParams.get("documentId");
   const documentId = documentIdParam || undefined;
@@ -158,15 +160,9 @@ export default function Validate() {
   const showEmpty = cards.length === 0;
 
   if (showEmpty) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-6">
-          <Check className="w-12 h-12 text-primary" />
-        </div>
-        <h2 className="text-2xl font-bold mb-2">没有待校验的卡片</h2>
-        <p className="text-muted-foreground">您已完成所有卡片的审查，可以开始复习了！</p>
-      </div>
-    );
+    // 没有待校验卡片时，直接返回到总览面板，而不展示单独的“空状态页面”
+    setLocation("/");
+    return null;
   }
 
   if (isDone) {
