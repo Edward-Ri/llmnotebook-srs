@@ -3,6 +3,12 @@ export type Paragraph = {
   content: string;
 };
 
+export type Section = {
+  id: number;
+  startIndex: number;
+  endIndex: number;
+};
+
 export function physicalChunk(cleanText: string): Paragraph[] {
   if (!cleanText) return [];
 
@@ -25,5 +31,19 @@ export function physicalChunk(cleanText: string): Paragraph[] {
   }
 
   return blocks;
+}
+
+export function segmentSections(blocks: Paragraph[]): Section[] {
+  const sections: Section[] = [];
+
+  for (let i = 0; i < blocks.length; i += 4) {
+    sections.push({
+      id: sections.length,
+      startIndex: i,
+      endIndex: Math.min(i + 3, blocks.length - 1),
+    });
+  }
+
+  return sections;
 }
 

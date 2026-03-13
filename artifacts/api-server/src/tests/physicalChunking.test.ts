@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { physicalChunk, type Paragraph } from "../utils/physicalChunking";
+import {
+  physicalChunk,
+  segmentSections,
+  type Paragraph,
+  type Section,
+} from "../utils/physicalChunking";
 
 function run() {
   // Basic splitting and indexing
@@ -53,6 +58,87 @@ function run() {
     const blocks = physicalChunk(input);
 
     assert.equal(blocks.length, 0);
+  }
+
+  // Section segmentation: empty input
+  {
+    const blocks: Paragraph[] = [];
+    const sections = segmentSections(blocks);
+    assert.deepEqual(sections, []);
+  }
+
+  // Section segmentation: 1..4 paragraphs -> single section
+  {
+    for (let len = 1; len <= 4; len++) {
+      const blocks: Paragraph[] = Array.from({ length: len }, (_, index) => ({
+        index,
+        content: `P${index}`,
+      }));
+
+      const sections = segmentSections(blocks);
+
+      const expected: Section[] = [
+        {
+          id: 0,
+          startIndex: 0,
+          endIndex: len - 1,
+        },
+      ];
+
+      assert.deepEqual(sections, expected);
+    }
+  }
+
+  // Section segmentation: 5 paragraphs -> [0-3], [4-4]
+  {
+    const blocks: Paragraph[] = Array.from({ length: 5 }, (_, index) => ({
+      index,
+      content: `P${index}`,
+    }));
+
+    const sections = segmentSections(blocks);
+
+    const expected: Section[] = [
+      { id: 0, startIndex: 0, endIndex: 3 },
+      { id: 1, startIndex: 4, endIndex: 4 },
+    ];
+
+    assert.deepEqual(sections, expected);
+  }
+
+  // Section segmentation: 8 paragraphs -> [0-3], [4-7]
+  {
+    const blocks: Paragraph[] = Array.from({ length: 8 }, (_, index) => ({
+      index,
+      content: `P${index}`,
+    }));
+
+    const sections = segmentSections(blocks);
+
+    const expected: Section[] = [
+      { id: 0, startIndex: 0, endIndex: 3 },
+      { id: 1, startIndex: 4, endIndex: 7 },
+    ];
+
+    assert.deepEqual(sections, expected);
+  }
+
+  // Section segmentation: 10 paragraphs -> [0-3], [4-7], [8-9]
+  {
+    const blocks: Paragraph[] = Array.from({ length: 10 }, (_, index) => ({
+      index,
+      content: `P${index}`,
+    }));
+
+    const sections = segmentSections(blocks);
+
+    const expected: Section[] = [
+      { id: 0, startIndex: 0, endIndex: 3 },
+      { id: 1, startIndex: 4, endIndex: 7 },
+      { id: 2, startIndex: 8, endIndex: 9 },
+    ];
+
+    assert.deepEqual(sections, expected);
   }
 }
 
