@@ -6,8 +6,18 @@ import {
   GenerateCardsBody,
   ValidateCardsBatchBody,
 } from "@workspace/api-zod";
+import { z } from "zod/v4";
 
 const router: IRouter = Router();
+
+const BatchAssignDeckBody = z.object({
+  assignments: z.array(
+    z.object({
+      id: z.number(),
+      deckId: z.number().nullable(),
+    }),
+  ),
+});
 
 function generateCardContent(keyword: string): { front: string; back: string } {
   const templates = [
@@ -142,6 +152,19 @@ router.put("/validate/batch", async (req, res) => {
     kept,
     discarded,
   });
+});
+
+router.patch("/batch-assign-deck", async (req, res) => {
+  const body = BatchAssignDeckBody.parse(req.body);
+
+  for (const assignment of body.assignments) {
+    await db
+      .update(cardsTable)
+      .set({ deckId: assignment.deckId })
+      .where(eq(cardsTable.id, assignment.id));
+  }
+
+  res.json({ updated: body.assignments.length });
 });
 
 export default router;

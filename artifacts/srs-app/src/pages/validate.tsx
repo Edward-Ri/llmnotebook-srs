@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
-import { useGetPendingCards, useValidateCardsBatch } from "@workspace/api-client-react";
-import type { Card, CardValidationItemAction } from "@workspace/api-client-react";
+import {
+  useGetPendingCards,
+  useValidateCardsBatch,
+  useListDecks,
+  useCreateDeck,
+  useAssignCardsToDeck,
+} from "@workspace/api-client-react";
+import type {
+  Card,
+  CardValidationItemAction,
+  DeckSummary,
+} from "@workspace/api-client-react";
 import { Check, X, Edit3, ArrowRight, Save, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card as UICard } from "@/components/ui/card";
@@ -13,17 +23,28 @@ type ValidationState = {
   action: CardValidationItemAction;
   frontContent: string;
   backContent: string;
+  deckId?: number | null;
 };
 
 export default function Validate() {
-  const { data, isLoading } = useGetPendingCards();
+  const searchParams = new URLSearchParams(window.location.search);
+  const documentIdParam = searchParams.get("documentId");
+  const documentId = documentIdParam ? Number(documentIdParam) : undefined;
+
+  const { data, isLoading } = useGetPendingCards(
+    documentId ? { documentId } : undefined,
+  );
   const validateBatchMutation = useValidateCardsBatch();
+  const { data: decksData } = useListDecks();
+  const createDeckMutation = useCreateDeck();
+  const assignDeckMutation = useAssignCardsToDeck();
   const { toast } = useToast();
 
   const [cards, setCards] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [validations, setValidations] = useState<Record<number, ValidationState>>({});
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedDeckId, setSelectedDeckId] = useState<number | null>(null);
 
   // Editable fields state
   const [editFront, setEditFront] = useState("");
@@ -55,6 +76,7 @@ export default function Validate() {
         action,
         frontContent: action === "edit" ? editFront : currentCard.frontContent,
         backContent: action === "edit" ? editBack : currentCard.backContent,
+        deckId: selectedDeckId ?? undefined,
       }
     }));
 
@@ -68,18 +90,59 @@ export default function Validate() {
       id: parseInt(id),
       action: val.action,
       frontContent: val.frontContent,
-      backContent: val.backContent
+      backContent: val.backContent,
     }));
+
+    const assignments = Object.entries(validations)
+      .filter(([, val]) => val.deckId !== undefined)
+      .map(([id, val]) => ({
+        id: parseInt(id, 10),
+        deckId: val.deckId ?? null,
+      }));
 
     try {
       await validateBatchMutation.mutateAsync({ data: { validations: payload } });
+      if (assignments.length > 0) {
+        await assignDeckMutation.mutateAsync({ data: { assignments } });
+      }
       toast({ title: "校验完成", description: `成功处理了 ${payload.length} 张卡片` });
       // Reset state or refetch
       setCards([]);
       setCurrentIndex(0);
       setValidations({});
+      setSelectedDeckId(null);
     } catch (err: any) {
       toast({ title: "提交失败", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeckChange = async (value: string) => {
+    if (value === "") {
+      setSelectedDeckId(null);
+      return;
+    }
+
+    if (value === "__new") {
+      const name = window.prompt("请输入新卡片组名称");
+      if (!name) return;
+
+      try {
+        const deck = await createDeckMutation.mutateAsync({ data: { name } });
+        setSelectedDeckId(deck.id);
+        toast({ title: "已创建卡片组", description: deck.name });
+      } catch (error: any) {
+        toast({
+          title: "创建卡片组失败",
+          description: error?.message ?? "请稍后重试",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
+    const numericId = Number(value);
+    if (!Number.isNaN(numericId)) {
+      setSelectedDeckId(numericId);
     }
   };
 
@@ -130,15 +193,37 @@ export default function Validate() {
 
   return (
     <div className="h-full max-w-6xl mx-auto p-6 flex flex-col">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">双屏卡片校验</h1>
-          <p className="text-sm text-muted-foreground">决定保留、修改还是丢弃 AI 生成的卡片</p>
+          <p className="text-sm text-muted-foreground">
+            决定保留、修改还是丢弃 AI 生成的卡片，并可一次性分配到指定卡片组。
+          </p>
         </div>
-        <div className="text-right">
-          <div className="text-sm font-semibold mb-1">进度 {Object.keys(validations).length} / {cards.length}</div>
-          <div className="w-48">
-            <Progress value={progress} className="h-2" />
+        <div className="flex items-end gap-4">
+          <div className="text-right">
+            <div className="text-sm font-semibold mb-1">
+              进度 {Object.keys(validations).length} / {cards.length}
+            </div>
+            <div className="w-40 md:w-48">
+              <Progress value={progress} className="h-2" />
+            </div>
+          </div>
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-[11px] text-muted-foreground">分配到卡片组</span>
+            <select
+              className="h-9 rounded-md border border-border bg-background px-2 text-xs md:text-sm"
+              value={selectedDeckId ?? ""}
+              onChange={(e) => handleDeckChange(e.target.value)}
+            >
+              <option value="">不分配</option>
+              {decksData?.decks.map((deck: DeckSummary) => (
+                <option key={deck.id} value={deck.id}>
+                  {deck.name}（{deck.totalCards} 张）
+                </option>
+              ))}
+              <option value="__new">新建卡片组…</option>
+            </select>
           </div>
         </div>
       </div>

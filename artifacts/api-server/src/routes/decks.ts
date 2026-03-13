@@ -1,0 +1,140 @@
+import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { decksTable, cardsTable, keywordsTable, documentsTable } from "@workspace/db/schema";
+import { and, count, eq, lte } from "drizzle-orm";
+import { z } from "zod/v4";
+
+const router: IRouter = Router();
+
+const CreateDeckBody = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+});
+
+router.get("/", async (_req, res) => {
+  const decks = await db.select().from(decksTable).orderBy(decksTable.createdAt);
+
+  const result = await Promise.all(
+    decks.map(async (deck) => {
+      const [total] = await db
+        .select({ count: count() })
+        .from(cardsTable)
+        .where(eq(cardsTable.deckId, deck.id));
+
+      const now = new Date();
+      const [due] = await db
+        .select({ count: count() })
+        .from(cardsTable)
+        .where(
+          and(
+            eq(cardsTable.deckId, deck.id),
+            eq(cardsTable.status, "active"),
+            lte(cardsTable.dueDate, now)
+          )
+        );
+
+      return {
+        id: deck.id,
+        name: deck.name,
+        description: deck.description ?? "",
+        createdAt: deck.createdAt.toISOString(),
+        updatedAt: deck.updatedAt.toISOString(),
+        totalCards: total.count,
+        dueCards: due.count,
+      };
+    })
+  );
+
+  res.json({ decks: result });
+});
+
+router.post("/", async (req, res) => {
+  const body = CreateDeckBody.parse(req.body);
+
+  const [deck] = await db
+    .insert(decksTable)
+    .values({
+      name: body.name,
+      description: body.description ?? null,
+    })
+    .returning();
+
+  res.status(201).json({
+    id: deck.id,
+    name: deck.name,
+    description: deck.description ?? "",
+    createdAt: deck.createdAt.toISOString(),
+    updatedAt: deck.updatedAt.toISOString(),
+    totalCards: 0,
+    dueCards: 0,
+  });
+});
+
+router.get("/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) {
+    return res.status(400).json({ error: "Invalid deck id" });
+  }
+
+  const [deck] = await db.select().from(decksTable).where(eq(decksTable.id, id)).limit(1);
+  if (!deck) {
+    return res.status(404).json({ error: "Deck not found" });
+  }
+
+  const cards = await db
+    .select({
+      id: cardsTable.id,
+      frontContent: cardsTable.frontContent,
+      backContent: cardsTable.backContent,
+      status: cardsTable.status,
+      keywordId: cardsTable.keywordId,
+      dueDate: cardsTable.dueDate,
+      keyword: keywordsTable.word,
+      documentId: documentsTable.id,
+      documentTitle: documentsTable.title,
+    })
+    .from(cardsTable)
+    .leftJoin(keywordsTable, eq(cardsTable.keywordId, keywordsTable.id))
+    .leftJoin(documentsTable, eq(keywordsTable.documentId, documentsTable.id))
+    .where(eq(cardsTable.deckId, id));
+
+  const now = new Date();
+  const [total] = await db
+    .select({ count: count() })
+    .from(cardsTable)
+    .where(eq(cardsTable.deckId, id));
+  const [due] = await db
+    .select({ count: count() })
+    .from(cardsTable)
+    .where(
+      and(
+        eq(cardsTable.deckId, id),
+        eq(cardsTable.status, "active"),
+        lte(cardsTable.dueDate, now)
+      )
+    );
+
+  res.json({
+    id: deck.id,
+    name: deck.name,
+    description: deck.description ?? "",
+    createdAt: deck.createdAt.toISOString(),
+    updatedAt: deck.updatedAt.toISOString(),
+    totalCards: total.count,
+    dueCards: due.count,
+    cards: cards.map((c) => ({
+      id: c.id,
+      frontContent: c.frontContent,
+      backContent: c.backContent,
+      status: c.status,
+      keywordId: c.keywordId,
+      keyword: c.keyword ?? "",
+      dueDate: c.dueDate?.toISOString(),
+      documentId: c.documentId,
+      documentTitle: c.documentTitle,
+    })),
+  });
+});
+
+export default router;
+

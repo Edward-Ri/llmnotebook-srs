@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { cardsTable, keywordsTable, reviewLogsTable } from "@workspace/db/schema";
 import { eq, and, lte, count, gte } from "drizzle-orm";
+import { z } from "zod/v4";
 import { LogReviewBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -35,17 +36,30 @@ function sm2Algorithm(
   return { newEfactor, newInterval, newRepetition };
 }
 
-router.get("/due", async (_req, res) => {
+const GetDueCardsQuery = z.object({
+  deckId: z.coerce.number().optional(),
+});
+
+router.get("/due", async (req, res) => {
   const now = new Date();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const dueCards = await db.select().from(cardsTable).where(
-    and(
-      eq(cardsTable.status, "active"),
-      lte(cardsTable.dueDate, now)
-    )
-  );
+  const { deckId } = GetDueCardsQuery.parse(req.query);
+
+  const conditions = [
+    eq(cardsTable.status, "active"),
+    lte(cardsTable.dueDate, now),
+  ] as const;
+
+  const whereClause = deckId
+    ? and(...conditions, eq(cardsTable.deckId, deckId))
+    : and(...conditions);
+
+  const dueCards = await db
+    .select()
+    .from(cardsTable)
+    .where(whereClause);
 
   const todayReviewed = await db.select({ count: count() }).from(reviewLogsTable).where(
     gte(reviewLogsTable.createdAt, todayStart)

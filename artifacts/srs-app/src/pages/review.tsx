@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useGetDueCards, useLogReview } from "@workspace/api-client-react";
-import type { Card } from "@workspace/api-client-react";
+import type { Card, DueCardsResponse } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { RefreshCw, BookOpen, Clock, Brain } from "lucide-react";
@@ -9,7 +10,41 @@ import { Card as UICard } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
 export default function Review() {
-  const { data, isLoading, refetch } = useGetDueCards();
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const searchParams = new URLSearchParams(search);
+  const deckIdParam = searchParams.get("deckId");
+  const deckId = deckIdParam ? Number(deckIdParam) : undefined;
+
+  const baseDue = useGetDueCards();
+
+  const deckFilteredDue = useQuery<DueCardsResponse, Error>({
+    queryKey: ["/api/reviews/due", { deckId }],
+    enabled: !!deckId,
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`/api/reviews/due?deckId=${deckId}`, { signal });
+      if (!res.ok) {
+        throw new Error("无法加载待复习卡片");
+      }
+      return (await res.json()) as DueCardsResponse;
+    },
+  });
+
+  const deckMeta = useQuery<{ id: number; name: string }, Error>({
+    queryKey: ["/api/decks", deckId],
+    enabled: !!deckId,
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`/api/decks/${deckId}`, { signal });
+      if (!res.ok) {
+        throw new Error("无法加载卡片组信息");
+      }
+      const json = await res.json();
+      return { id: json.id, name: json.name as string };
+    },
+  });
+
+  const data = deckId ? deckFilteredDue.data : baseDue.data;
+  const isLoading = deckId ? deckFilteredDue.isLoading : baseDue.isLoading;
+
   const logReviewMutation = useLogReview();
 
   const [cards, setCards] = useState<Card[]>([]);
@@ -22,7 +57,7 @@ export default function Review() {
       setCards(data.cards);
       setTotalInitial(data.cards.length);
     }
-  }, [data]);
+  }, [data, totalInitial]);
 
   const currentCard = cards[currentIndex];
   
@@ -78,8 +113,18 @@ export default function Review() {
         <p className="text-lg text-muted-foreground mb-8 max-w-md">
           太棒了，你已经清空了今天的复习队列。间隔重复让记忆更持久。
         </p>
-        <Button size="lg" onClick={() => window.location.href = '/'} className="px-8 shadow-md">
-          返回主页
+        <Button
+          size="lg"
+          onClick={() => {
+            if (deckId) {
+              window.location.href = `/decks/${deckId}`;
+            } else {
+              window.location.href = "/";
+            }
+          }}
+          className="px-8 shadow-md"
+        >
+          {deckId ? "返回卡片组" : "返回主页"}
         </Button>
       </div>
     );
@@ -90,11 +135,18 @@ export default function Review() {
   return (
     <div className="h-full max-w-4xl mx-auto p-6 md:p-12 flex flex-col">
       <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-primary/10 rounded-xl">
-            <BookOpen className="w-6 h-6 text-primary" />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-primary/10 rounded-xl">
+              <BookOpen className="w-6 h-6 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold">每日复习</h1>
           </div>
-          <h1 className="text-2xl font-bold">每日复习</h1>
+          <p className="text-xs text-muted-foreground">
+            {deckId
+              ? `正在复习：${deckMeta.data?.name ?? `卡片组 #${deckId}`}`
+              : "当前模式：全部待复习卡片"}
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-sm font-medium text-muted-foreground">

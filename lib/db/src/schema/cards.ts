@@ -2,10 +2,12 @@ import { pgTable, serial, text, integer, real, timestamp, index } from "drizzle-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { keywordsTable } from "./keywords";
+import { decksTable } from "./decks";
 
 export const cardsTable = pgTable("cards", {
   id: serial("id").primaryKey(),
   keywordId: integer("keyword_id").notNull().references(() => keywordsTable.id),
+  deckId: integer("deck_id").references(() => decksTable.id),
   frontContent: text("front_content").notNull(),
   backContent: text("back_content").notNull(),
   status: text("status").notNull().default("pending_validation"),

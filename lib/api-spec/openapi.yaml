@@ -17,6 +17,8 @@ tags:
     description: Spaced repetition review operations
   - name: analytics
     description: Learning analytics
+  - name: decks
+    description: Deck management and card grouping
 paths:
   /healthz:
     get:
@@ -162,11 +164,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/BatchValidationResponse"
 
+  /cards/batch-assign-deck:
+    patch:
+      operationId: batchAssignDeck
+      tags: [cards]
+      summary: 批量分配卡片到卡片组
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchAssignDeckRequest"
+      responses:
+        "200":
+          description: 更新结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchAssignDeckResponse"
+
   /reviews/due:
     get:
       operationId: getDueCards
       tags: [reviews]
       summary: 获取今日到期复习卡片
+      parameters:
+        - name: deckId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
           description: 到期卡片列表
@@ -174,6 +201,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DueCardsResponse"
+
+  /decks:
+    get:
+      operationId: listDecks
+      tags: [decks]
+      summary: 获取所有卡片组列表
+      responses:
+        "200":
+          description: 卡片组列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckListResponse"
+    post:
+      operationId: createDeck
+      tags: [decks]
+      summary: 创建新的卡片组
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeckRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckSummary"
+
+  /decks/{id}:
+    get:
+      operationId: getDeck
+      tags: [decks]
+      summary: 获取单个卡片组详情
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 卡片组详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckDetail"
 
   /reviews/log:
     post:
@@ -421,6 +497,135 @@ components:
         - processed
         - kept
         - discarded
+
+    DeckSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        totalCards:
+          type: integer
+        dueCards:
+          type: integer
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+        - totalCards
+        - dueCards
+
+    DeckListResponse:
+      type: object
+      properties:
+        decks:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckSummary"
+      required:
+        - decks
+
+    DeckCard:
+      type: object
+      properties:
+        id:
+          type: integer
+        frontContent:
+          type: string
+        backContent:
+          type: string
+        status:
+          type: string
+        keywordId:
+          type: integer
+        keyword:
+          type: string
+        dueDate:
+          type: string
+        documentId:
+          type: integer
+        documentTitle:
+          type: string
+      required:
+        - id
+        - frontContent
+        - backContent
+        - status
+        - keywordId
+
+    DeckDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        totalCards:
+          type: integer
+        dueCards:
+          type: integer
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckCard"
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+        - totalCards
+        - dueCards
+        - cards
+
+    CreateDeckRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required:
+        - name
+
+    BatchAssignDeckRequest:
+      type: object
+      properties:
+        assignments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              deckId:
+                type: integer
+                nullable: true
+            required:
+              - id
+      required:
+        - assignments
+
+    BatchAssignDeckResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+        - updated
 
     DueCardsResponse:
       type: object

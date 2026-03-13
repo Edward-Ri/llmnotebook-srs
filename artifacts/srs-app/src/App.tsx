@@ -13,6 +13,8 @@ import {
 import { BrainCircuit, LayoutDashboard, FileText, CheckSquare, Brain, BarChart3, Plus } from "lucide-react";
 
 import { AuthProvider } from "@/contexts/AuthContext";
+import { useCreateDeck } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Analyze from "@/pages/analyze";
@@ -41,6 +43,24 @@ const NAV_ITEMS = [
 
 function TopNav() {
   const [location] = useLocation();
+  const createDeckMutation = useCreateDeck();
+  const { toast } = useToast();
+
+  const handleCreateDeck = async () => {
+    const name = window.prompt("请输入新卡片组名称");
+    if (!name) return;
+
+    try {
+      const deck = await createDeckMutation.mutateAsync({ data: { name } });
+      toast({ title: "已创建卡片组", description: deck.name });
+    } catch (error: any) {
+      toast({
+        title: "创建卡片组失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 md:px-6 flex items-center justify-between h-14 md:h-16 gap-4">
@@ -97,11 +117,7 @@ function TopNav() {
             <DropdownMenuItem asChild>
               <Link href="/analyze">新建阅读材料</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                // TODO: 接入新建卡片组逻辑（POST /decks）
-              }}
-            >
+            <DropdownMenuItem onClick={handleCreateDeck}>
               新建卡片组
             </DropdownMenuItem>
           </DropdownMenuContent>
