@@ -11,7 +11,7 @@
 - **Node**: 使用 `nvm` 切到 Node 20（例如 20.20.1）
 - **包管理器**: 必须使用 `pnpm`
 - **数据库**: 本机已安装并启动 PostgreSQL，默认监听 `localhost:5432`
-- **LLM**: 需要配置 `DEEPSEEK_API_KEY`（DeepSeek/OpenAI 兼容接口）
+- **LLM**: 需要配置 `DEEPSEEK_API_KEY`
 
 在任意新终端中先执行：
 
@@ -39,22 +39,19 @@ CREATE USER srs_user WITH PASSWORD 'srs_password';
 GRANT ALL PRIVILEGES ON DATABASE srs_db TO srs_user;
 ```
 
-后端及 Drizzle/ORM 通过以下连接串访问数据库：
+后端通过以下连接串访问数据库：
 
 ```bash
 export DATABASE_URL="postgresql://srs_user:srs_password@localhost:5432/srs_db"
 export DEEPSEEK_API_KEY="your_api_key_here"
 ```
 
-### 文本材料相关表：`documents` 与 `text_blocks`
+`.env` 位置：`artifacts/api-server/.env`（占位符已提供）：
 
-- `documents` 表代表一篇阅读材料或文档。
-- `text_blocks` 表代表该文档拆分后的「文本块」，用于精细化分析与排序：
-  - **一对多关系**：一行 `documents` 可以关联多行 `text_blocks`（`text_blocks.document_id` 外键指向 `documents.id`，并配置了 `ON DELETE CASCADE`，删除文档会自动删除其下所有文本块）。
-  - **顺序语义**：`text_blocks.position_index` 表示文本块在文档中的顺序，从 0 或 1 开始连续递增（实际起始值由上游切分逻辑决定，但必须在同一文档内保持严格单调递增以反映真实顺序）。
-  - **唯一性约束**：同一文档内 `(document_id, position_index)` 组合是唯一的，数据库层会拒绝插入或更新到重复的 `position_index`，以保证单个文档的块顺序不会出现「两块占用同一位置」的情况。
-
-开发时如果需要根据顺序读取某个文档的所有文本块，应按 `position_index` 升序查询指定 `document_id` 的所有 `text_blocks` 记录。
+```
+DEEPSEEK_API_KEY=your_api_key_here
+DATABASE_URL=postgresql://srs_user:srs_password@localhost:5432/srs_db
+```
 
 ---
 
@@ -95,19 +92,17 @@ source ~/.nvm/nvm.sh 2>/dev/null || true
 nvm use 20
 
 cd artifacts/srs-app
-pnpm dev
+API_TARGET=http://localhost:4000 pnpm dev
 ```
 
 成功标志：
 
-- 终端输出类似：
+```text
+VITE v7.3.x  ready in xxx ms
+➜  Local:   http://localhost:5173/
+```
 
-  ```text
-  VITE v7.3.x  ready in xxx ms
-  ➜  Local:   http://localhost:5173/
-  ```
-
-如果此时后端未启动，会在终端看到 `http proxy error: /api/... ECONNREFUSED`，属于正常保护行为，启动后端即可恢复。
+> 注意：前端默认代理指向 `http://localhost:3000`，当前后端在 4000，必须显式设置 `API_TARGET`。
 
 ---
 
