@@ -230,6 +230,7 @@ export default function Analyze() {
   const [stage, setStage] = useState<Stage>("input");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [analysisContent, setAnalysisContent] = useState("");
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [toc, setToc] = useState<TOCNode[]>([]);
@@ -246,7 +247,8 @@ export default function Analyze() {
   const updateKeywordsMutation = useUpdateKeywordSelections();
   const generateCardsMutation = useGenerateCards();
 
-  const paragraphs = useMemo(() => normalizeParagraphs(content), [content]);
+  const displayContent = analysisContent || content;
+  const paragraphs = useMemo(() => normalizeParagraphs(displayContent), [displayContent]);
   const keywordMap = useMemo(
     () => new Map(keywords.map((k) => [k.id, k])),
     [keywords]
@@ -305,6 +307,7 @@ export default function Analyze() {
       const res = await analyzeDocMutation.mutateAsync({
         data: { title: title || "未命名文档", content },
       });
+      setAnalysisContent(content);
       setDocumentId(res.documentId);
       setKeywords(enrichKeywords(res.keywords, content));
       setToc(res.toc ?? []);
@@ -506,7 +509,7 @@ export default function Analyze() {
                   </div>
                 ) : (
                   <HighlightedText
-                    content={content}
+                    content={displayContent}
                     keywords={keywords}
                     hoveredKeyword={hoveredKeyword}
                     activeKeyword={activeKeyword}
