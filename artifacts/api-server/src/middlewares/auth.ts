@@ -22,10 +22,17 @@ export function verifyToken(token: string): AuthPayload | null {
 }
 
 export function attachUser(req: Request, _res: Response, next: NextFunction) {
-  const token = req.cookies?.[COOKIE_NAME];
-  if (token) {
-    const payload = verifyToken(token);
+  const cookieToken = req.cookies?.[COOKIE_NAME];
+  if (cookieToken) {
+    const payload = verifyToken(cookieToken);
     if (payload) (req as Request & { user?: AuthPayload }).user = payload;
+  } else {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      const bearerToken = authHeader.slice("Bearer ".length).trim();
+      const payload = verifyToken(bearerToken);
+      if (payload) (req as Request & { user?: AuthPayload }).user = payload;
+    }
   }
   next();
 }
