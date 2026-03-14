@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import {
+  cardCandidatesTable,
   decksTable,
   documentsTable,
   flashcardsTable,
@@ -31,6 +32,26 @@ const BatchCreateCardsRequest = z.object({
 const GenerateCardsRequest = z.object({
   documentId: z.string().uuid(),
   keywordIds: z.array(z.string().uuid()).min(1),
+});
+
+const GetPendingCardsQuery = z.object({
+  documentId: z.string().uuid().optional(),
+});
+
+const ValidateCardsBatchRequest = z.object({
+  validations: z.array(z.object({
+    id: z.string().uuid(),
+    action: z.enum(["keep", "edit", "discard"]),
+    frontContent: z.string().optional(),
+    backContent: z.string().optional(),
+  })).min(1),
+});
+
+const BatchAssignDeckRequest = z.object({
+  assignments: z.array(z.object({
+    id: z.string().uuid(),
+    deckId: z.string().uuid().nullable().optional(),
+  })).min(1),
 });
 
 type LlmCard = { front: string; back: string };
@@ -141,14 +162,15 @@ router.post("/generate", requireAuth, async (req, res) => {
 
     const blockContents = blocks.map((b) => b.content);
 
-    const cards: {
-      id: string;
+    const pendingRows: {
+      userId: string;
+      documentId: string;
+      keywordId: string | null;
       frontContent: string;
       backContent: string;
       status: "pending_validation";
-      keywordId: string;
-      keyword: string;
     }[] = [];
+    const keywordByIndex: string[] = [];
 
     for (const kw of keywords) {
       const start = Number(kw.startBlockIndex ?? 0);
@@ -177,16 +199,40 @@ router.post("/generate", requireAuth, async (req, res) => {
       const raw = await deepseekChat(messages, { temperature: 0.2 });
       const parsed = parseCardsJson(raw);
       for (const item of parsed) {
-        cards.push({
-          id: randomUUID(),
+        pendingRows.push({
+          userId,
+          documentId: body.documentId,
+          keywordId: kw.id,
           frontContent: item.front,
           backContent: item.back,
           status: "pending_validation",
-          keywordId: kw.id,
-          keyword: kw.word,
         });
+        keywordByIndex.push(kw.word);
       }
     }
+
+    if (pendingRows.length === 0) {
+      return res.json({ cards: [], total: 0 });
+    }
+
+    const inserted = await db
+      .insert(cardCandidatesTable)
+      .values(pendingRows)
+      .returning({
+        id: cardCandidatesTable.id,
+        frontContent: cardCandidatesTable.frontContent,
+        backContent: cardCandidatesTable.backContent,
+        keywordId: cardCandidatesTable.keywordId,
+      });
+
+    const cards = inserted.map((row, index) => ({
+      id: row.id,
+      frontContent: row.frontContent,
+      backContent: row.backContent,
+      status: "pending_validation",
+      keywordId: row.keywordId ?? "",
+      keyword: keywordByIndex[index],
+    }));
 
     return res.json({
       cards,
@@ -201,11 +247,159 @@ router.post("/generate", requireAuth, async (req, res) => {
   }
 });
 
-router.all(["/generate", "/pending", "/validate/batch", "/batch-assign-deck"], (_req, res) => {
-  res.status(501).json({
-    error: "NOT_IMPLEMENTED",
-    message: "Cards endpoints are deprecated in the SQL-new schema. Use flashcards instead.",
-  });
+router.get("/pending", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const parsed = GetPendingCardsQuery.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error.issues);
+    }
+    const documentId = parsed.data.documentId;
+
+    const conditions = [
+      eq(cardCandidatesTable.userId, userId),
+      eq(cardCandidatesTable.status, "pending_validation"),
+    ];
+    if (documentId) conditions.push(eq(cardCandidatesTable.documentId, documentId));
+
+    const rows = await db
+      .select({
+        id: cardCandidatesTable.id,
+        frontContent: cardCandidatesTable.frontContent,
+        backContent: cardCandidatesTable.backContent,
+        keywordId: cardCandidatesTable.keywordId,
+        keyword: keywordsTable.word,
+      })
+      .from(cardCandidatesTable)
+      .leftJoin(keywordsTable, eq(cardCandidatesTable.keywordId, keywordsTable.id))
+      .where(and(...conditions))
+      .orderBy(asc(cardCandidatesTable.createdAt));
+
+    const cards = rows.map((row) => ({
+      id: row.id,
+      frontContent: row.frontContent,
+      backContent: row.backContent,
+      status: "pending_validation",
+      keywordId: row.keywordId ?? "",
+      keyword: row.keyword ?? undefined,
+    }));
+
+    return res.json({ cards, total: cards.length });
+  } catch (error) {
+    console.error("Get pending cards failed", error);
+    return res.status(500).json({ error: "获取待校验卡片失败" });
+  }
+});
+
+router.put("/validate/batch", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const body = ValidateCardsBatchRequest.parse(req.body);
+
+    let kept = 0;
+    let discarded = 0;
+
+    await db.transaction(async (tx) => {
+      for (const item of body.validations) {
+        if (item.action === "discard") {
+          const result = await tx
+            .update(cardCandidatesTable)
+            .set({ status: "discarded" })
+            .where(and(eq(cardCandidatesTable.id, item.id), eq(cardCandidatesTable.userId, userId)));
+          discarded += result.rowCount ?? 0;
+          continue;
+        }
+
+        const updateValues: { status: string; frontContent?: string; backContent?: string } = {
+          status: "active",
+        };
+        if (item.action === "edit") {
+          if (item.frontContent) updateValues.frontContent = item.frontContent;
+          if (item.backContent) updateValues.backContent = item.backContent;
+        }
+
+        const result = await tx
+          .update(cardCandidatesTable)
+          .set(updateValues)
+          .where(and(eq(cardCandidatesTable.id, item.id), eq(cardCandidatesTable.userId, userId)));
+        kept += result.rowCount ?? 0;
+      }
+    });
+
+    return res.json({
+      processed: body.validations.length,
+      kept,
+      discarded,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(error.issues);
+    }
+    console.error("Validate cards batch failed", error);
+    return res.status(500).json({ error: "批量校验卡片失败" });
+  }
+});
+
+router.patch("/batch-assign-deck", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const body = BatchAssignDeckRequest.parse(req.body);
+
+    const assignments = body.assignments.filter((item) => !!item.deckId);
+    if (assignments.length === 0) {
+      return res.json({ updated: 0 });
+    }
+
+    const deckIds = Array.from(new Set(assignments.map((item) => item.deckId as string)));
+    const decks = await db
+      .select({ id: decksTable.id })
+      .from(decksTable)
+      .where(and(eq(decksTable.userId, userId), inArray(decksTable.id, deckIds)));
+    if (decks.length !== deckIds.length) {
+      return res.status(400).json({ error: "存在无效卡片组" });
+    }
+
+    const candidateIds = assignments.map((item) => item.id);
+    const candidates = await db
+      .select({
+        id: cardCandidatesTable.id,
+        frontContent: cardCandidatesTable.frontContent,
+        backContent: cardCandidatesTable.backContent,
+        keywordId: cardCandidatesTable.keywordId,
+        status: cardCandidatesTable.status,
+      })
+      .from(cardCandidatesTable)
+      .where(and(eq(cardCandidatesTable.userId, userId), inArray(cardCandidatesTable.id, candidateIds)));
+
+    const candidateById = new Map(candidates.map((c) => [c.id, c]));
+
+    let insertedCount = 0;
+    await db.transaction(async (tx) => {
+      for (const assignment of assignments) {
+        const candidate = candidateById.get(assignment.id);
+        if (!candidate || candidate.status !== "active") continue;
+
+        await tx.insert(flashcardsTable).values({
+          deckId: assignment.deckId as string,
+          frontContent: candidate.frontContent,
+          backContent: candidate.backContent,
+          sourceKeywordId: candidate.keywordId ?? null,
+          sourceTextBlockId: null,
+        });
+        insertedCount += 1;
+
+        await tx.delete(cardCandidatesTable).where(eq(cardCandidatesTable.id, candidate.id));
+      }
+    });
+
+    return res.json({ updated: insertedCount });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(error.issues);
+    }
+    console.error("Batch assign deck failed", error);
+    return res.status(500).json({ error: "批量分配卡片组失败" });
+  }
 });
 
 export default router;
