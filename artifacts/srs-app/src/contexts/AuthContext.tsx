@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
 export interface AuthUser {
-  id: number;
+  id: string;
   email: string;
 }
 
@@ -18,21 +18,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const createGuest = useCallback(async () => {
+    const res = await fetch("/api/auth/guest", { method: "POST" });
+    if (!res.ok) {
+      throw new Error("无法创建访客身份");
+    }
+    const data = await res.json();
+    if (data?.token) {
+      sessionStorage.setItem("guest_token", data.token);
+    }
+    if (data?.user) {
+      setUser(data.user);
+    }
+  }, []);
+
   const fetchMe = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
-      } else {
-        setUser(null);
+        sessionStorage.removeItem("guest_token");
+        return;
       }
+      if (res.status === 401) {
+        await createGuest();
+        return;
+      }
+      setUser(null);
     } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [createGuest]);
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
 
@@ -71,13 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("注册成功，但未收到用户信息，请稍后再试");
     }
 
+    sessionStorage.removeItem("guest_token");
     setUser(data.user);
   }, []);
 
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    sessionStorage.removeItem("guest_token");
     setUser(null);
-  }, []);
+    setLoading(true);
+    await fetchMe();
+  }, [fetchMe]);
 
   return (
     <AuthContext.Provider value={{ user, loading, register, logout }}>

@@ -284,6 +284,10 @@ export async function customFetch<T = unknown>(
   }
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+  if (!headers.has("authorization") && typeof sessionStorage !== "undefined") {
+    const token = sessionStorage.getItem("guest_token");
+    if (token) headers.set("authorization", `Bearer ${token}`);
+  }
 
   if (
     typeof init.body === "string" &&

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -10,15 +11,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BrainCircuit, LayoutDashboard, CheckSquare, Brain, BarChart3, Plus } from "lucide-react";
+import { BrainCircuit, LayoutDashboard, CheckSquare, BarChart3, Plus } from "lucide-react";
 
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useCreateDeck } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { AuthModal } from "@/components/AuthModal";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Validate from "@/pages/validate";
-import Review from "@/pages/review";
 import Analytics from "@/pages/analytics";
 import MaterialDetail from "@/pages/material-detail";
 import DeckDetail from "@/pages/deck-detail";
@@ -36,14 +37,15 @@ const queryClient = new QueryClient({
 const NAV_ITEMS = [
   { title: "总览面板", url: "/", icon: LayoutDashboard },
   { title: "卡片校验", url: "/validate", icon: CheckSquare },
-  { title: "间隔复习", url: "/review", icon: Brain },
   { title: "学习分析", url: "/analytics", icon: BarChart3 },
 ];
 
 function TopNav() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const createDeckMutation = useCreateDeck();
   const { toast } = useToast();
+  const { user, loading, logout } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
 
   const handleCreateDeck = async () => {
     const name = window.prompt("请输入新卡片组名称");
@@ -52,6 +54,7 @@ function TopNav() {
     try {
       const deck = await createDeckMutation.mutateAsync({ data: { name } });
       toast({ title: "已创建卡片组", description: deck.name });
+      setLocation(`/decks/${deck.id}`);
     } catch (error: any) {
       toast({
         title: "创建卡片组失败",
@@ -104,7 +107,7 @@ function TopNav() {
         </div>
       </nav>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" className="gap-1.5 rounded-full px-3 md:px-4">
@@ -121,7 +124,26 @@ function TopNav() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {!loading && user && user.email.includes("guest_") && (
+          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+            <span>数据退出后将丢失</span>
+            <Button size="sm" variant="outline" onClick={() => setShowAuth(true)}>
+              登录 / 注册
+            </Button>
+          </div>
+        )}
+
+        {!loading && user && !user.email.includes("guest_") && (
+          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="max-w-[180px] truncate">{user.email}</span>
+            <Button size="sm" variant="outline" onClick={logout}>
+              退出登录
+            </Button>
+          </div>
+        )}
       </div>
+      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
     </div>
   );
 }
@@ -134,7 +156,6 @@ function Router() {
       <Route path="/materials/:id" component={MaterialDetail} />
       <Route path="/decks/:id" component={DeckDetail} />
       <Route path="/validate" component={Validate} />
-      <Route path="/review" component={Review} />
       <Route path="/analytics" component={Analytics} />
       <Route component={NotFound} />
     </Switch>
