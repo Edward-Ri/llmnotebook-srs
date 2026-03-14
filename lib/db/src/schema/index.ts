@@ -5,3 +5,4 @@ export * from "./keywords";
 export * from "./sections";
 export * from "./decks";
 export * from "./flashcards";
+export * from "./cardCandidates";
