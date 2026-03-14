@@ -355,7 +355,7 @@ export default function Analyze() {
       await updateKeywordsMutation.mutateAsync({ documentId, data: { selectedIds } });
       const res = await generateCardsMutation.mutateAsync({ data: { documentId, keywordIds: selectedIds } });
       toast({ title: "生成成功", description: `已生成 ${res.total} 张候选卡片` });
-      setTimeout(() => setLocation("/validate"), 1200);
+      setTimeout(() => setLocation(`/validate?documentId=${documentId}`), 1200);
     } catch (err: any) {
       toast({ title: "生成失败", description: err.message, variant: "destructive" });
       setStage("keywords");

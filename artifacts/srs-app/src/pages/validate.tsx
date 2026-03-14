@@ -93,6 +93,18 @@ export default function Validate() {
   };
 
   const handleBatchSubmit = async () => {
+    const hasKept = Object.values(validations).some(
+      (val) => val.action === "keep" || val.action === "edit",
+    );
+    if (hasKept && !selectedDeckId) {
+      toast({
+        title: "请选择卡片组",
+        description: "保留的卡片需要分配到卡片组后才能保存。",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const payload = Object.entries(validations).map(([id, val]) => ({
       id,
       action: val.action,
