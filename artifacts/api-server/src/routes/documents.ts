@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { db } from "@workspace/db";
 import {
   documentsTable,
@@ -7,7 +7,7 @@ import {
   sectionsTable,
   flashcardsTable,
 } from "@workspace/db/schema";
-import { eq, count } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import {
   AnalyzeDocumentBody,
   UpdateKeywordSelectionsBody,
@@ -18,8 +18,10 @@ import {
   segmentSections,
 } from "../utils/physicalChunking";
 import { deepseekChat, type ChatMessage } from "../services/llm";
+import { requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
+const getUserId = (req: Request) => (req as Request & { user: { userId: string } }).user.userId;
 
 type LlmKeyword = { word: string; reason?: string; score?: number };
 
@@ -36,8 +38,9 @@ function parseKeywordJson(raw: string): LlmKeyword[] {
   }
 }
 
-router.post("/analyze", async (req, res) => {
+router.post("/analyze", requireAuth, async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = AnalyzeDocumentBody.parse(req.body);
 
     const paragraphs = physicalChunk(body.content);
@@ -46,6 +49,7 @@ router.post("/analyze", async (req, res) => {
 
     const [doc] = await db.insert(documentsTable).values({
       title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
+      userId,
     }).returning();
 
     if (paragraphs.length > 0) {
@@ -184,9 +188,34 @@ router.post("/analyze", async (req, res) => {
   }
 });
 
-router.get("/", async (_req, res) => {
-  const docs = await db.select().from(documentsTable).orderBy(documentsTable.createdAt);
-  
+router.get("/", requireAuth, async (req, res) => {
+  const userId = getUserId(req);
+  const docs = await db
+    .select()
+    .from(documentsTable)
+    .where(eq(documentsTable.userId, userId))
+    .orderBy(desc(documentsTable.createdAt));
+
+  const docIds = docs.map((doc) => doc.id);
+  const blocks = docIds.length > 0
+    ? await db
+      .select({
+        documentId: textBlocksTable.documentId,
+        content: textBlocksTable.content,
+        positionIndex: textBlocksTable.positionIndex,
+      })
+      .from(textBlocksTable)
+      .where(inArray(textBlocksTable.documentId, docIds))
+      .orderBy(asc(textBlocksTable.documentId), asc(textBlocksTable.positionIndex))
+    : [];
+
+  const contentByDoc = new Map<string, string>();
+  for (const block of blocks) {
+    const prev = contentByDoc.get(block.documentId) ?? "";
+    const next = prev.length > 0 ? `${prev}\n\n${block.content}` : block.content;
+    contentByDoc.set(block.documentId, next);
+  }
+
   const result = await Promise.all(docs.map(async (doc) => {
     const kwCount = await db
       .select({ count: count() })
@@ -202,7 +231,7 @@ router.get("/", async (_req, res) => {
     return {
       id: doc.id,
       title: doc.title,
-      content: "",
+      content: contentByDoc.get(doc.id) ?? "",
       createdAt: doc.createdAt.toISOString(),
       keywordCount: kwCount[0]?.count ?? 0,
       cardCount: cardCount[0]?.count ?? 0,
@@ -212,13 +241,20 @@ router.get("/", async (_req, res) => {
   res.json({ documents: result });
 });
 
-router.get("/:documentId/keywords", async (req, res) => {
+router.get("/:documentId/keywords", requireAuth, async (req, res) => {
+  const userId = getUserId(req);
   const documentId = req.params.documentId;
   const keywords = await db
     .select()
     .from(keywordsTable)
     .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-    .where(eq(sectionsTable.documentId, documentId));
+    .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+    .where(
+      and(
+        eq(sectionsTable.documentId, documentId),
+        eq(documentsTable.userId, userId),
+      ),
+    );
   res.json({
     keywords: keywords.map((row) => ({
       id: row.keywords.id,
@@ -229,7 +265,8 @@ router.get("/:documentId/keywords", async (req, res) => {
   });
 });
 
-router.put("/:documentId/keywords", async (req, res) => {
+router.put("/:documentId/keywords", requireAuth, async (req, res) => {
+  const userId = getUserId(req);
   const documentId = req.params.documentId;
   const body = UpdateKeywordSelectionsBody.parse(req.body);
 
@@ -237,7 +274,13 @@ router.put("/:documentId/keywords", async (req, res) => {
       .select({ id: keywordsTable.id })
       .from(keywordsTable)
       .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-      .where(eq(sectionsTable.documentId, documentId));
+      .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+      .where(
+        and(
+          eq(sectionsTable.documentId, documentId),
+          eq(documentsTable.userId, userId),
+        ),
+      );
 
     for (const kw of keywords) {
       await db.update(keywordsTable)
@@ -249,7 +292,13 @@ router.put("/:documentId/keywords", async (req, res) => {
     .select()
     .from(keywordsTable)
     .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-    .where(eq(sectionsTable.documentId, documentId));
+    .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+    .where(
+      and(
+        eq(sectionsTable.documentId, documentId),
+        eq(documentsTable.userId, userId),
+      ),
+    );
   res.json({
     keywords: updated.map((row) => ({
       id: row.keywords.id,
