@@ -128,7 +128,7 @@ function TopNav() {
         </DropdownMenu>
 
         {!loading && user && user.email.includes("guest_") && (
-          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>数据退出后将丢失</span>
             <Button size="sm" variant="outline" asChild>
               <Link href="/login">登录 / 注册</Link>
@@ -137,12 +137,18 @@ function TopNav() {
         )}
 
         {!loading && user && !user.email.includes("guest_") && (
-          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="max-w-[180px] truncate">{user.email}</span>
             <Button size="sm" variant="outline" onClick={logout}>
               退出登录
             </Button>
           </div>
+        )}
+
+        {!loading && !user && (
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/login">登录 / 注册</Link>
+          </Button>
         )}
       </div>
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
