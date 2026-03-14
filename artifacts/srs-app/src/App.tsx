@@ -24,6 +24,8 @@ import Analytics from "@/pages/analytics";
 import MaterialDetail from "@/pages/material-detail";
 import DeckDetail from "@/pages/deck-detail";
 import NewMaterialNotebook from "@/pages/material-new";
+import LoginPage from "@/pages/login";
+import RegisterPage from "@/pages/register";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -128,8 +130,8 @@ function TopNav() {
         {!loading && user && user.email.includes("guest_") && (
           <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
             <span>数据退出后将丢失</span>
-            <Button size="sm" variant="outline" onClick={() => setShowAuth(true)}>
-              登录 / 注册
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/login">登录 / 注册</Link>
             </Button>
           </div>
         )}
@@ -151,6 +153,9 @@ function TopNav() {
 function Router() {
   return (
     <Switch>
+      <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/" component={Dashboard} />
       <Route path="/materials/new" component={NewMaterialNotebook} />
       <Route path="/materials/:id" component={MaterialDetail} />
