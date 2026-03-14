@@ -43,7 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (res.status === 401) {
-        await createGuest();
+        const token = sessionStorage.getItem("guest_token");
+        if (!token) {
+          await createGuest();
+        } else {
+          setUser(null);
+        }
         return;
       }
       setUser(null);
@@ -73,16 +78,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") sendLogout();
-    };
-
     window.addEventListener("beforeunload", sendLogout);
-    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       window.removeEventListener("beforeunload", sendLogout);
-      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 

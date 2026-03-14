@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function AuthModal({ open, onClose }: Props) {
-  const { register } = useAuth();
+  const { register, refresh } = useAuth();
   const [tab, setTab] = useState<"register" | "login">("register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +40,7 @@ export function AuthModal({ open, onClose }: Props) {
         }
 
         if (!res.ok) throw new Error(data?.error || "登录失败");
-        window.location.reload();
+        await refresh();
       }
       setDone(true);
       setTimeout(onClose, 900);
