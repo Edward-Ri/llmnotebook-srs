@@ -9,7 +9,6 @@ import {
 } from "@workspace/db/schema";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import {
-  AnalyzeDocumentBody,
   UpdateKeywordSelectionsBody,
 } from "@workspace/api-zod";
 import {
@@ -19,9 +18,15 @@ import {
 } from "../utils/physicalChunking";
 import { deepseekChat, type ChatMessage } from "../services/llm";
 import { requireAuth } from "../middlewares/auth";
+import { z } from "zod";
 
 const router: IRouter = Router();
-const getUserId = (req: Request) => (req as Request & { user: { userId: string } }).user.userId;
+const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
+
+const AnalyzeDocumentRequest = z.object({
+  documentId: z.string().uuid(),
+  text: z.string(),
+});
 
 type LlmKeyword = { word: string; reason?: string; score?: number };
 
@@ -38,19 +43,48 @@ function parseKeywordJson(raw: string): LlmKeyword[] {
   }
 }
 
+router.post("/", requireAuth, async (req, res) => {
+  const userId = getUserId(req);
+  const { title } = req.body ?? {};
+  const [doc] = await db.insert(documentsTable).values({
+    title: typeof title === "string" && title.trim().length > 0
+      ? title.trim()
+      : `文档 ${new Date().toLocaleDateString("zh-CN")}`,
+    userId,
+  }).returning();
+
+  return res.json({
+    document: {
+      id: doc.id,
+      title: doc.title,
+      createdAt: doc.createdAt.toISOString(),
+    },
+  });
+});
+
 router.post("/analyze", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
-    const body = AnalyzeDocumentBody.parse(req.body);
+    const body = AnalyzeDocumentRequest.parse(req.body);
 
-    const paragraphs = physicalChunk(body.content);
+    const [doc] = await db
+      .select({ id: documentsTable.id, title: documentsTable.title })
+      .from(documentsTable)
+      .where(and(eq(documentsTable.id, body.documentId), eq(documentsTable.userId, userId)))
+      .limit(1);
+
+    if (!doc) {
+      return res.status(404).json({ error: "DOCUMENT_NOT_FOUND" });
+    }
+
+    const paragraphs = physicalChunk(body.text);
     const sections = segmentSections(paragraphs);
-    const tocTree = buildTocTree(sections, paragraphs);
 
-    const [doc] = await db.insert(documentsTable).values({
-      title: body.title || `文档 ${new Date().toLocaleDateString("zh-CN")}`,
-      userId,
-    }).returning();
+    if (paragraphs.length === 0 || sections.length === 0) {
+      return res.status(400).json({ error: "EMPTY_DOCUMENT" });
+    }
+
+    const tocTree = buildTocTree(sections, paragraphs);
 
     if (paragraphs.length > 0) {
       await db.insert(textBlocksTable).values(
@@ -136,14 +170,16 @@ router.post("/analyze", requireAuth, async (req, res) => {
       }
     }
 
-    const keywordRows = await db.insert(keywordsTable).values(
+    const keywordRows = sectionKeywords.length > 0
+      ? await db.insert(keywordsTable).values(
       sectionKeywords.map((kw) => ({
         sectionId: kw.sectionId,
         textBlockId: null,
         word: kw.word,
         status: "PENDING",
       })),
-    ).returning();
+    ).returning()
+      : [];
 
     const keywordsBySection = new Map<number, { id: string; word: string }[]>();
     sectionKeywords.forEach((kw, index) => {

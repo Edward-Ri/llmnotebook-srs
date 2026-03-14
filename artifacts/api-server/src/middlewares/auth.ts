@@ -5,7 +5,7 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 export const COOKIE_NAME = "srs_token";
 
 export interface AuthPayload {
-  userId: string;
+  id: string;
   email: string;
 }
 

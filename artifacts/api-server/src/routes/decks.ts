@@ -5,21 +5,22 @@ import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
-const getUserId = (req: Request) => (req as Request & { user: { userId: string } }).user.userId;
+const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
 
 router.post("/", requireAuth, async (req, res) => {
   const userId = getUserId(req);
-  const { name, parentId } = req.body ?? {};
+  const { name, parentId, parent_id } = req.body ?? {};
+  const resolvedParentId = parentId ?? parent_id ?? null;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return res.status(400).json({ error: "卡片组名称不能为空" });
   }
 
-  if (parentId) {
+  if (resolvedParentId) {
     const parent = await db
       .select({ id: decksTable.id })
       .from(decksTable)
-      .where(and(eq(decksTable.id, parentId), eq(decksTable.userId, userId)))
+      .where(and(eq(decksTable.id, resolvedParentId), eq(decksTable.userId, userId)))
       .limit(1);
     if (parent.length === 0) {
       return res.status(400).json({ error: "父级卡片组不存在" });
@@ -30,17 +31,15 @@ router.post("/", requireAuth, async (req, res) => {
     .insert(decksTable)
     .values({
       name: name.trim(),
-      parentId: parentId ?? null,
+      parentId: resolvedParentId,
       userId,
     })
     .returning();
 
   return res.json({
-    deck: {
-      id: deck.id,
-      name: deck.name,
-      parentId: deck.parentId,
-    },
+    id: deck.id,
+    name: deck.name,
+    parentId: deck.parentId,
   });
 });
 
