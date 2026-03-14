@@ -6,6 +6,7 @@ import {
   useListDecks,
   useCreateDeck,
   useBatchAssignDeck,
+  getListDecksQueryKey,
 } from "@workspace/api-client-react";
 import type {
   Card,
@@ -18,7 +19,9 @@ import { Card as UICard } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 
 type ValidationState = {
   action: CardValidationItemAction;
@@ -41,6 +44,8 @@ export default function Validate() {
   const createDeckMutation = useCreateDeck();
   const assignDeckMutation = useBatchAssignDeck();
   const { toast } = useToast();
+  const { user, loading, refresh } = useAuth();
+  const queryClient = useQueryClient();
 
   const [cards, setCards] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -129,7 +134,11 @@ export default function Validate() {
       if (!name) return;
 
       try {
+        if (loading || !user) {
+          await refresh();
+        }
         const deck = await createDeckMutation.mutateAsync({ data: { name } });
+        queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
         setSelectedDeckId(deck.id);
         toast({ title: "已创建卡片组", description: deck.name });
       } catch (error: any) {

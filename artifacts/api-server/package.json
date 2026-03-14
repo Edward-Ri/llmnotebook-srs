@@ -18,7 +18,8 @@
     "dotenv": "^16.4.5",
     "drizzle-orm": "catalog:",
     "express": "^5",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

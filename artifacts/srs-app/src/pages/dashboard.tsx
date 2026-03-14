@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, History, MoreHorizontal, Sparkles, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useListDecks } from "@workspace/api-client-react";
 
 type NotebookTab = "all" | "materials" | "decks" | "history";
 
@@ -15,6 +16,7 @@ interface RecentItem {
   subtitle: string;
   updatedAt: string;
   href: string;
+  sortAt?: number;
 }
 
 interface FeaturedDeck {
@@ -25,6 +27,16 @@ interface FeaturedDeck {
   href: string;
   accent: string;
 }
+
+type DeckNode = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  children?: DeckNode[];
+  totalCards?: number;
+  dueCards?: number;
+  updatedAt?: string;
+};
 
 const FEATURED_DECKS: FeaturedDeck[] = [
   {
@@ -63,28 +75,12 @@ const RECENT_ITEMS: RecentItem[] = [
     href: "/materials/1",
   },
   {
-    id: "d1",
-    type: "deck",
-    title: "认知科学入门精读卡片组",
-    subtitle: "卡片组 · 56 张卡片",
-    updatedAt: "1 小时前",
-    href: "/decks/1",
-  },
-  {
     id: "m2",
     type: "material",
     title: "Spacing effect 经典论文",
     subtitle: "论文 · 8 个高价值段落",
     updatedAt: "昨天",
     href: "/materials/2",
-  },
-  {
-    id: "d2",
-    type: "deck",
-    title: "日常英语表达卡片组",
-    subtitle: "卡片组 · 80 张卡片",
-    updatedAt: "昨天",
-    href: "/decks/2",
   },
   {
     id: "h1",
@@ -105,14 +101,54 @@ const TABS: { key: NotebookTab; label: string }[] = [
 
 export default function Dashboard() {
   const [tab, setTab] = useState<NotebookTab>("all");
+  const { data: decksData, isLoading: isDecksLoading } = useListDecks();
 
-  const filteredItems = RECENT_ITEMS.filter((item) => {
-    if (tab === "all") return true;
-    if (tab === "materials") return item.type === "material";
-    if (tab === "decks") return item.type === "deck";
-    if (tab === "history") return item.type === "history";
-    return true;
-  });
+  const deckItems = useMemo(() => {
+    const deckNodes = (decksData?.decks ?? []) as DeckNode[];
+    const flattened: DeckNode[] = [];
+    const stack = [...deckNodes];
+    while (stack.length > 0) {
+      const node = stack.shift();
+      if (!node) continue;
+      flattened.push(node);
+      if (node.children && node.children.length > 0) {
+        stack.unshift(...node.children);
+      }
+    }
+
+    const items = flattened.map((deck) => {
+      const totalCards =
+        typeof deck.totalCards === "number" ? `${deck.totalCards} 张卡片` : "卡片组";
+      const sortAt = deck.updatedAt ? Date.parse(deck.updatedAt) : undefined;
+      const updatedAt = deck.updatedAt
+        ? new Date(deck.updatedAt).toLocaleString()
+        : "—";
+      return {
+        id: deck.id,
+        type: "deck" as const,
+        title: deck.name,
+        subtitle: `卡片组 · ${totalCards}`,
+        updatedAt,
+        sortAt,
+        href: `/decks/${deck.id}`,
+      };
+    });
+
+    return items.sort((a, b) => {
+      const aTime = a.sortAt ?? -1;
+      const bTime = b.sortAt ?? -1;
+      return bTime - aTime;
+    });
+  }, [decksData]);
+
+  const filteredItems = useMemo(() => {
+    const merged = [...RECENT_ITEMS, ...deckItems];
+    if (tab === "all") return merged;
+    if (tab === "materials") return merged.filter((item) => item.type === "material");
+    if (tab === "decks") return deckItems;
+    if (tab === "history") return merged.filter((item) => item.type === "history");
+    return merged;
+  }, [deckItems, tab]);
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -230,6 +266,16 @@ export default function Dashboard() {
               transition={{ duration: 0.18 }}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
             >
+              {tab === "decks" && isDecksLoading && (
+                <div className="col-span-full rounded-2xl border border-border/60 bg-card/60 p-6 text-sm text-muted-foreground">
+                  正在加载你的卡片组…
+                </div>
+              )}
+              {tab === "decks" && !isDecksLoading && deckItems.length === 0 && (
+                <div className="col-span-full rounded-2xl border border-border/60 bg-card/60 p-6 text-sm text-muted-foreground">
+                  还没有卡片组，先去创建一个吧。
+                </div>
+              )}
               {filteredItems.map((item) => (
                 <Link key={item.id} href={item.href} className="group block">
                   <div className="relative h-full rounded-2xl border border-border/60 bg-card/80 px-4 py-3 hover:border-primary/40 hover:shadow-lg hover:-translate-y-0.5 transition-all">

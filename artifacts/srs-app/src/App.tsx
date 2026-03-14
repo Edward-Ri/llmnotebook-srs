@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -14,7 +14,7 @@ import {
 import { BrainCircuit, LayoutDashboard, CheckSquare, BarChart3, Plus } from "lucide-react";
 
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { useCreateDeck } from "@workspace/api-client-react";
+import { getListDecksQueryKey, useCreateDeck } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import NotFound from "@/pages/not-found";
@@ -45,8 +45,9 @@ const NAV_ITEMS = [
 function TopNav() {
   const [location, setLocation] = useLocation();
   const createDeckMutation = useCreateDeck();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, refresh } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
 
   const handleCreateDeck = async () => {
@@ -54,7 +55,11 @@ function TopNav() {
     if (!name) return;
 
     try {
+      if (loading || !user) {
+        await refresh();
+      }
       const deck = await createDeckMutation.mutateAsync({ data: { name } });
+      queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
       toast({ title: "已创建卡片组", description: deck.name });
       setLocation(`/decks/${deck.id}`);
     } catch (error: any) {
