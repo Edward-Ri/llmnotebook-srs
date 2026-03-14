@@ -1,5 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me";
 export const COOKIE_NAME = "srs_token";
@@ -21,17 +24,62 @@ export function verifyToken(token: string): AuthPayload | null {
   }
 }
 
-export function attachUser(req: Request, _res: Response, next: NextFunction) {
+export async function attachUser(req: Request, res: Response, next: NextFunction) {
   const cookieToken = req.cookies?.[COOKIE_NAME];
   if (cookieToken) {
     const payload = verifyToken(cookieToken);
-    if (payload) (req as Request & { user?: AuthPayload }).user = payload;
+    if (payload) {
+      const user = await db
+        .select({
+          id: usersTable.id,
+          email: usersTable.email,
+          isGuest: usersTable.isGuest,
+          expiresAt: usersTable.expiresAt,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.id, payload.id))
+        .limit(1);
+      if (user.length > 0) {
+        const record = user[0];
+        if (record.isGuest && record.expiresAt && record.expiresAt <= new Date()) {
+          await db.delete(usersTable).where(eq(usersTable.id, record.id));
+          res.clearCookie(COOKIE_NAME);
+        } else {
+          (req as Request & { user?: AuthPayload }).user = {
+            id: record.id,
+            email: record.email,
+          };
+        }
+      }
+    }
   } else {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith("Bearer ")) {
       const bearerToken = authHeader.slice("Bearer ".length).trim();
       const payload = verifyToken(bearerToken);
-      if (payload) (req as Request & { user?: AuthPayload }).user = payload;
+      if (payload) {
+        const user = await db
+          .select({
+            id: usersTable.id,
+            email: usersTable.email,
+            isGuest: usersTable.isGuest,
+            expiresAt: usersTable.expiresAt,
+          })
+          .from(usersTable)
+          .where(eq(usersTable.id, payload.id))
+          .limit(1);
+        if (user.length > 0) {
+          const record = user[0];
+          if (record.isGuest && record.expiresAt && record.expiresAt <= new Date()) {
+            await db.delete(usersTable).where(eq(usersTable.id, record.id));
+          } else {
+            (req as Request & { user?: AuthPayload }).user = {
+              id: record.id,
+              email: record.email,
+            };
+          }
+        }
+      }
     }
   }
   next();

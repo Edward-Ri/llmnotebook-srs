@@ -56,6 +56,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
 
+  useEffect(() => {
+    const sendLogout = () => {
+      try {
+        const token = sessionStorage.getItem("guest_token");
+        const headers: Record<string, string> = {};
+        if (token) headers.authorization = `Bearer ${token}`;
+        fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+          headers,
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        // ignore unload errors
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") sendLogout();
+    };
+
+    window.addEventListener("beforeunload", sendLogout);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("beforeunload", sendLogout);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     await fetchMe();

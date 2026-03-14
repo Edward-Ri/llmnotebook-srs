@@ -30,3 +30,9 @@ ALTER TABLE decks
 
 CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents (user_id);
 CREATE INDEX IF NOT EXISTS idx_decks_user_id ON decks (user_id);
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS is_guest BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP NULL;

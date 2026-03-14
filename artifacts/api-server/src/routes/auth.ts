@@ -62,7 +62,11 @@ router.post("/guest", async (_req, res) => {
   const guestId = randomUUID();
   const email = `guest_${guestId}@temp.local`;
   const passwordHash = await bcrypt.hash(randomUUID(), 10);
-  const [user] = await db.insert(usersTable).values({ email, passwordHash }).returning();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const [user] = await db
+    .insert(usersTable)
+    .values({ email, passwordHash, isGuest: true, expiresAt })
+    .returning();
   const token = signToken({ id: user.id, email: user.email });
   return res.json({ token, user: { id: user.id, email: user.email } });
 });
@@ -72,7 +76,18 @@ router.get("/me", requireAuth, (req, res) => {
   return res.json({ user: { id: user.id, email: user.email } });
 });
 
-router.post("/logout", (_req, res) => {
+router.post("/logout", async (req, res) => {
+  const user = (req as typeof req & { user?: { id: string } }).user;
+  if (user?.id) {
+    const rows = await db
+      .select({ id: usersTable.id, isGuest: usersTable.isGuest })
+      .from(usersTable)
+      .where(eq(usersTable.id, user.id))
+      .limit(1);
+    if (rows.length > 0 && rows[0].isGuest) {
+      await db.delete(usersTable).where(eq(usersTable.id, user.id));
+    }
+  }
   res.clearCookie(COOKIE_NAME);
   return res.json({ ok: true });
 });
