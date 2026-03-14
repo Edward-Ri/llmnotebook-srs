@@ -9,6 +9,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   register: (email: string, password: string) => Promise<void>;
+  refresh: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -54,6 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [createGuest]);
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    await fetchMe();
+  }, [fetchMe]);
 
   const register = useCallback(async (email: string, password: string) => {
     let res: Response;
@@ -103,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchMe]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, register, refresh, logout }}>
       {children}
     </AuthContext.Provider>
   );
