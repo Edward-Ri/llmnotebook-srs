@@ -12,7 +12,7 @@ export interface Card {
   frontContent: string;
   backContent: string;
   status: CardStatus;
-  keywordId: string;
+  keywordId: string | null;
   keyword?: string;
   sm2Interval?: number;
   sm2Repetition?: number;

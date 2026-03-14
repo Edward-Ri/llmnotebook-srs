@@ -230,7 +230,7 @@ router.post("/generate", requireAuth, async (req, res) => {
       frontContent: row.frontContent,
       backContent: row.backContent,
       status: "pending_validation",
-      keywordId: row.keywordId ?? "",
+      keywordId: row.keywordId ?? null,
       keyword: keywordByIndex[index],
     }));
 
@@ -280,7 +280,7 @@ router.get("/pending", requireAuth, async (req, res) => {
       frontContent: row.frontContent,
       backContent: row.backContent,
       status: "pending_validation",
-      keywordId: row.keywordId ?? "",
+      keywordId: row.keywordId ?? null,
       keyword: row.keyword ?? undefined,
     }));
 

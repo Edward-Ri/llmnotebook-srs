@@ -179,7 +179,7 @@ export const GenerateCardsResponse = zod.object({
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.enum(["pending_validation", "active", "discarded"]),
-      keywordId: zod.string().uuid(),
+      keywordId: zod.string().uuid().nullable(),
       keyword: zod.string().optional(),
       sm2Interval: zod.number().optional(),
       sm2Repetition: zod.number().optional(),
@@ -204,7 +204,7 @@ export const GetPendingCardsResponse = zod.object({
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.enum(["pending_validation", "active", "discarded"]),
-      keywordId: zod.string().uuid(),
+      keywordId: zod.string().uuid().nullable(),
       keyword: zod.string().optional(),
       sm2Interval: zod.number().optional(),
       sm2Repetition: zod.number().optional(),
@@ -265,7 +265,7 @@ export const GetDueCardsResponse = zod.object({
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.enum(["pending_validation", "active", "discarded"]),
-      keywordId: zod.string().uuid(),
+      keywordId: zod.string().uuid().nullable(),
       keyword: zod.string().optional(),
       sm2Interval: zod.number().optional(),
       sm2Repetition: zod.number().optional(),
@@ -323,7 +323,7 @@ export const GetDeckResponse = zod.object({
       frontContent: zod.string(),
       backContent: zod.string(),
       status: zod.string(),
-      keywordId: zod.string().uuid(),
+      keywordId: zod.string().uuid().nullable(),
       keyword: zod.string().optional(),
       dueDate: zod.string().optional(),
       documentId: zod.string().uuid().optional(),
@@ -336,7 +336,7 @@ export const GetDeckResponse = zod.object({
  * @summary 记录复习结果并更新SM-2参数
  */
 export const logReviewBodyGradeMin = 0;
-export const logReviewBodyGradeMax = 3;
+export const logReviewBodyGradeMax = 5;
 
 export const LogReviewBody = zod.object({
   cardId: zod.string().uuid(),
@@ -344,7 +344,7 @@ export const LogReviewBody = zod.object({
     .number()
     .min(logReviewBodyGradeMin)
     .max(logReviewBodyGradeMax)
-    .describe("0=完全遗忘, 1=困难, 2=一般, 3=轻松"),
+    .describe("0=完全遗忘, 3=艰难回想, 5=完美记忆"),
 });
 
 export const LogReviewResponse = zod.object({
@@ -353,7 +353,7 @@ export const LogReviewResponse = zod.object({
     frontContent: zod.string(),
     backContent: zod.string(),
     status: zod.enum(["pending_validation", "active", "discarded"]),
-    keywordId: zod.string().uuid(),
+    keywordId: zod.string().uuid().nullable(),
     keyword: zod.string().optional(),
     sm2Interval: zod.number().optional(),
     sm2Repetition: zod.number().optional(),

@@ -9,9 +9,9 @@
 export interface LogReviewRequest {
   cardId: string;
   /**
-   * 0=完全遗忘, 1=困难, 2=一般, 3=轻松
+   * 0=完全遗忘, 3=艰难回想, 5=完美记忆
    * @minimum 0
-   * @maximum 3
+   * @maximum 5
    */
   grade: number;
 }

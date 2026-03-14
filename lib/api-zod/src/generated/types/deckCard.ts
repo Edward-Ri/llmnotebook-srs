@@ -11,7 +11,7 @@ export interface DeckCard {
   frontContent: string;
   backContent: string;
   status: string;
-  keywordId: string;
+  keywordId: string | null;
   keyword?: string;
   dueDate?: string;
   documentId?: string;
