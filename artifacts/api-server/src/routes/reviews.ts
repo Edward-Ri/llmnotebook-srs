@@ -141,6 +141,7 @@ router.post("/log", requireAuth, async (req, res) => {
         .where(eq(flashcardsTable.id, card.id));
 
       await tx.insert(reviewLogsTable).values({
+        userId,
         cardId: card.id,
         grade: body.grade,
       });
