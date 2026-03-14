@@ -10,8 +10,8 @@ type DeckCard = {
   frontContent: string;
   backContent: string;
   status: string;
-  keywordId: string;
-  keyword: string;
+  keywordId: string | null;
+  keyword?: string;
   dueDate?: string;
   documentId?: string | null;
   documentTitle?: string | null;

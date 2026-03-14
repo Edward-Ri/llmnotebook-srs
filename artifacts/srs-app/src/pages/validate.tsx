@@ -258,9 +258,11 @@ export default function Validate() {
                   <Wand2 className="w-4 h-4 text-primary" />
                   AI 原始生成
                 </span>
-                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                  {currentCard.keyword}
-                </span>
+                {currentCard.keyword && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
+                    {currentCard.keyword}
+                  </span>
+                )}
               </div>
               <div className="p-6 flex-1 flex flex-col gap-6">
                 <div>
