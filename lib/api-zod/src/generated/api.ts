@@ -255,7 +255,7 @@ export const BatchAssignDeckResponse = zod.object({
  * @summary 获取今日到期复习卡片
  */
 export const GetDueCardsQueryParams = zod.object({
-  deckId: zod.coerce.number().optional(),
+  deckId: zod.string().uuid().optional(),
 });
 
 export const GetDueCardsResponse = zod.object({
@@ -306,7 +306,7 @@ export const CreateDeckBody = zod.object({
  * @summary 获取单个卡片组详情
  */
 export const GetDeckParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.string().uuid(),
 });
 
 export const GetDeckResponse = zod.object({

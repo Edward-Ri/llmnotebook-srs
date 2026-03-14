@@ -251,5 +251,5 @@ export type GetPendingCardsParams = {
 };
 
 export type GetDueCardsParams = {
-  deckId?: number;
+  deckId?: string;
 };

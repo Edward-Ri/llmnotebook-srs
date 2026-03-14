@@ -7,5 +7,5 @@
  */
 
 export type GetDueCardsParams = {
-  deckId?: number;
+  deckId?: string;
 };
