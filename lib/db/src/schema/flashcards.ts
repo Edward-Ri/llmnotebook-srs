@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { decksTable } from "./decks";
@@ -16,12 +16,20 @@ export const flashcardsTable = pgTable("flashcards", {
   }),
   frontContent: text("front_content").notNull(),
   backContent: text("back_content").notNull(),
+  repetition: integer("repetition").default(0).notNull(),
+  interval: integer("interval").default(0).notNull(),
+  easeFactor: real("ease_factor").default(2.5).notNull(),
+  nextReviewDate: timestamp("next_review_date").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertFlashcardSchema = createInsertSchema(flashcardsTable).omit({
   id: true,
   createdAt: true,
+  repetition: true,
+  interval: true,
+  easeFactor: true,
+  nextReviewDate: true,
 });
 
 export type InsertFlashcard = z.infer<typeof insertFlashcardSchema>;
