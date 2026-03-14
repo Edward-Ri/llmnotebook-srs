@@ -5,12 +5,11 @@
 - **名称**：`@workspace/srs-app`
 - **职责**：提供 AI 记忆引擎的 Web 前端界面，覆盖：
   - 文档解析与关键词筛选
-  - AI 生成卡片的人机协同校验（旧流转）
-  - SM-2 间隔复习（旧流转）
+  - AI 生成卡片的人机协同校验（部分旧流转）
   - 学习统计与可视化分析（旧流转）
   - 用户注册登录与会话管理展示
 
-> 说明：后端已迁移到 SQL-new 结构，旧的 cards/reviews/analytics/decks 接口暂时返回 501，前端这些页面处于“占位/待迁移”状态。
+> 说明：后端已迁移到 SQL-new 结构，旧的 cards/reviews/analytics 接口暂时返回 501，前端对应页面处于“占位/待迁移”状态；`/decks` 与 `/documents` 已按新结构可用。
 
 ### 2. 技术栈与依赖
 
@@ -44,7 +43,6 @@
     - `dashboard.tsx`
     - `analyze.tsx`
     - `validate.tsx`
-    - `review.tsx`
     - `analytics.tsx`
     - `material-new.tsx` / `material-detail.tsx`
     - `deck-detail.tsx`
@@ -66,27 +64,33 @@
   - 展开章节 → 左侧滚动定位
   - 点击关键词 → 高亮与选中状态同步
 
-#### 4.2 新建阅读材料（Notebook 风格）
+#### 4.2 总览面板（Dashboard）
+
+- 文件：`src/pages/dashboard.tsx`
+- 拉取 `GET /api/documents` 与 `GET /api/decks` 渲染“我的文档列表 / 我的卡片组列表”
+- 新建材料与卡片组创建后，使用 `setLocation` 跳转至详情页
+
+#### 4.3 新建阅读材料（Notebook 风格）
 
 - 文件：`src/pages/material-new.tsx`
 - 使用 `useAnalyzeDocument` 提交内容，成功后跳转 `/materials/:id`。
 
-#### 4.3 阅读材料详情
+#### 4.4 阅读材料详情
 
 - 文件：`src/pages/material-detail.tsx`
 - 展示阅读材料原文与关键词徽章列表（关键词 ID 为 UUID）。
 
-#### 4.4 旧流程页面（待迁移）
+#### 4.5 旧流程页面（待迁移）
 
-- `validate.tsx` / `review.tsx` / `analytics.tsx` / `deck-detail.tsx`
-- 这些页面仍在调用旧的 `cards/reviews/analytics/decks` API。
-- **当前后端返回 501**（旧接口已停用），前端功能需迁移到新的 flashcards/decks tree API 后才能恢复。
+- `validate.tsx` / `analytics.tsx` / `deck-detail.tsx`
+- `review.tsx` 已从路由中移除（统一入口调整为专属详情页）。
+- 旧的 `cards/reviews/analytics` API 当前返回 501，相关页面需迁移到新的 flashcards/decks tree API 后才能恢复。
 
 ### 5. 认证逻辑（AuthContext）
 
 - 文件：`src/contexts/AuthContext.tsx`
 - 通过 `/api/auth/me` 获取当前用户；使用 HTTP-only Cookie 维持会话。
-- `AuthUser`：`{ id: number; email: string }`
+- `AuthUser`：`{ id: string; email: string }`
 
 ### 6. 与后端的交互约定
 

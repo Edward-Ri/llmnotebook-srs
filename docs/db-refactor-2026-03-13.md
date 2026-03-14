@@ -50,3 +50,23 @@
 - `docs/database-tech-doc.md`
 - `docs/frontend-tech-doc.md`
 - `docs/local-dev-quickstart.md`
+
+---
+
+## 2026-03-14 用户体系与数据隔离
+
+### 1. 用户表与关联
+
+- 新增 `users` 表（UUID 主键、email 唯一、password_hash）
+- `documents` / `decks` 新增 `user_id` 外键（ON DELETE CASCADE）
+
+### 2. 鉴权与会话
+
+- `POST /api/auth/register` / `POST /api/auth/login` 实现 bcrypt + JWT
+- 使用 HTTP-only Cookie `srs_token` 保存会话
+- `GET /api/auth/me` 依赖 `requireAuth`
+
+### 3. 数据隔离
+
+- `GET /api/documents` / `GET /api/decks` 返回当前用户数据
+- `POST /api/documents/analyze` / `POST /api/decks` 强制绑定 `user_id`

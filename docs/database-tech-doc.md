@@ -17,18 +17,28 @@
 
 > 当前 Drizzle schema 已对齐 SQL-new 结构（UUID 主键、section/flashcard 关系）。旧表（`cards` / `review_logs` / 旧 `decks`）已从 schema 中移除。
 
-#### 3.1 文档表（`src/schema/documents.ts`）
+#### 3.1 用户表（`src/schema/users.ts`）
+
+| 列名 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | uuid | PK | 用户 ID（默认 `gen_random_uuid()`） |
+| email | varchar(255) | UNIQUE, NOT NULL | 邮箱 |
+| password_hash | varchar(255) | NOT NULL | 密码哈希 |
+| created_at | timestamp | NOT NULL, default now() | 创建时间 |
+
+#### 3.2 文档表（`src/schema/documents.ts`）
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | uuid | PK | 文档 ID（默认 `gen_random_uuid()`） |
+| user_id | uuid | FK → users.id | 归属用户 |
 | title | varchar(255) | NOT NULL | 标题 |
 | created_at | timestamp | NOT NULL, default now() | 创建时间 |
 | updated_at | timestamp | NOT NULL, default now() | 更新时间 |
 
-- **说明**：已移除 `user_id` 关联，文档与用户解绑（鉴权流程后续再接回）。
+- **说明**：文档与用户已重新绑定，按用户隔离数据。
 
-#### 3.2 段落表（`src/schema/textBlocks.ts`）
+#### 3.3 段落表（`src/schema/textBlocks.ts`）
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -37,7 +47,7 @@
 | content | text | NOT NULL | 段落文本 |
 | position_index | int | NOT NULL | 文档内顺序索引 |
 
-#### 3.3 章节表（`src/schema/sections.ts`）
+#### 3.4 章节表（`src/schema/sections.ts`）
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -49,7 +59,7 @@
 | end_block_index | int | NOT NULL | 结束段落索引 |
 | level | int | NOT NULL | 层级 |
 
-#### 3.4 关键词表（`src/schema/keywords.ts`）
+#### 3.5 关键词表（`src/schema/keywords.ts`）
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -59,15 +69,16 @@
 | word | varchar(100) | NOT NULL | 关键词文本 |
 | status | varchar(20) | NOT NULL, default 'PENDING' | 选择状态 |
 
-#### 3.5 Deck 树结构（`src/schema/decks.ts`）
+#### 3.6 Deck 树结构（`src/schema/decks.ts`）
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | uuid | PK | deck ID |
+| user_id | uuid | FK → users.id | 归属用户 |
 | name | varchar(100) | NOT NULL | deck 名称 |
 | parent_id | uuid | NULL, FK → decks.id | 父 deck |
 
-#### 3.6 Flashcards（`src/schema/flashcards.ts`）
+#### 3.7 Flashcards（`src/schema/flashcards.ts`）
 
 | 列名 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -87,11 +98,14 @@ SQL 层与 Drizzle 已对齐，主要脚本位于：
 - `lib/db/sql/keywords-add.sql`
 - `lib/db/sql/decks-tree-add.sql`
 - `lib/db/sql/flashcards-add.sql`
+- `lib/db/sql/users-add.sql`
 
 > 以上脚本用于初始化新结构，并由后端 `POST /api/documents/analyze` 写入数据。
 
 ### 5. 关系与删除策略（概览）
 
+- **User → Document**：`documents.user_id`（ON DELETE CASCADE）
+- **User → Deck**：`decks.user_id`（ON DELETE CASCADE）
 - **Document → TextBlock**：`text_blocks.document_id`（ON DELETE CASCADE）
 - **Document → Section**：`sections.document_id`（ON DELETE CASCADE）
 - **Section → Section（树）**：`sections.parent_section_id`（ON DELETE SET NULL）

@@ -44,6 +44,7 @@ GRANT ALL PRIVILEGES ON DATABASE srs_db TO srs_user;
 ```bash
 export DATABASE_URL="postgresql://srs_user:srs_password@localhost:5432/srs_db"
 export DEEPSEEK_API_KEY="your_api_key_here"
+export JWT_SECRET="dev-secret-change-me"
 ```
 
 `.env` 位置：`artifacts/api-server/.env`（占位符已提供）：

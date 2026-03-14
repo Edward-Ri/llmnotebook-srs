@@ -20,6 +20,7 @@
   - `src/routes/`：路由定义（`documents.ts`、`auth.ts`、`decks.ts`、`cards.ts`、`reviews.ts`、`analytics.ts`）
   - `src/utils/`：工具函数与通用逻辑（`physicalChunking.ts`、`toc-keywords.ts`）
   - `src/services/`：外部服务封装（`llm.ts`）
+  - `src/middlewares/`：鉴权与通用中间件（`auth.ts`）
   - `src/tests/`：关键工具/流程的 Node 测试脚本
 
 ### 3. 文本物理切分与 Section 分段（physicalChunking）
@@ -82,19 +83,37 @@ export function buildTocTree(sections: Section[], blocks: Paragraph[]): TOCNode[
 - LLM 调用失败：返回 HTTP 502，`{ error: "LLM_ERROR", message: "..." }`
 - 其他失败：返回 HTTP 500，`{ error: "ANALYZE_ERROR", message: "..." }`
 
-### 6. 旧接口与新结构的过渡说明
+### 6. 认证与会话（JWT + HTTP-only Cookie）
+
+- **注册**：`POST /api/auth/register`（bcrypt 哈希）
+- **登录**：`POST /api/auth/login`（bcrypt 校验）
+- **会话**：`GET /api/auth/me`（`requireAuth`）
+- **登出**：`POST /api/auth/logout`
+- **Cookie**：`srs_token`，HTTP-only，`sameSite=lax`，30 天有效期
+- **中间件**：`requireAuth` 解析 Cookie 内 JWT 并挂载 `req.user`
+
+### 7. 数据隔离（按用户）
+
+- `POST /api/documents/analyze`：写入 `documents.user_id`（来自 `req.user.userId`）
+- `GET /api/documents`：仅返回当前用户的文档，按创建时间倒序
+- `GET/PUT /api/documents/:id/keywords`：校验文档归属后才允许访问
+- `GET /api/decks`：仅返回当前用户的卡片组树
+- `POST /api/decks`：创建时强制绑定 `user_id`
+
+### 8. 旧接口与新结构的过渡说明
 
 - **SQL-new 结构已成为主结构**：`documents` / `text_blocks` / `sections` / `keywords` / `decks` / `flashcards`。
 - **旧学习流接口已暂时停用**（返回 501）：
-  - `/api/cards/*`、`/api/reviews/*`、`/api/analytics/*`、`/api/decks/*`
+  - `/api/cards/*`、`/api/reviews/*`、`/api/analytics/*`
+- **说明**：`/api/decks` 已按新结构恢复（GET/POST）。
 - **原因**：旧表（`cards` / `review_logs` / 旧 `decks`）已与新的 UUID/section 结构不兼容，等待新的 flashcards/decks tree API 接入。
 
-### 7. 测试
+### 9. 测试
 
 - `artifacts/api-server/src/tests/physicalChunking.test.ts`：覆盖文本切分、分段与 TOC 构建。
 - `artifacts/api-server/src/tests/documents.test.ts`：覆盖 TOC 关键词挂载逻辑（UUID 关键词 ID）。
 
-### 8. 环境变量（开发常用）
+### 10. 环境变量（开发常用）
 
 - `DATABASE_URL=postgresql://srs_user:srs_password@localhost:5432/srs_db`
 - `DEEPSEEK_API_KEY=your_api_key_here`
