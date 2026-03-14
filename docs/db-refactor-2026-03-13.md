@@ -70,3 +70,32 @@
 
 - `GET /api/documents` / `GET /api/decks` 返回当前用户数据
 - `POST /api/documents/analyze` / `POST /api/decks` 强制绑定 `user_id`
+
+---
+
+## 2026-03-15 复习与卡片流转重启
+
+### 1. SM-2 与复习日志
+
+- flashcards 补齐 SM-2 字段（repetition/interval/ease_factor/next_review_date）。
+- review_logs 改为 UUID 外键，并新增 user_id 用于用户级统计。
+- /api/reviews/due 实现到期卡片拉取与 todayReviewed 统计。
+- /api/reviews/log 实现评分写入 + SM-2 更新。
+
+### 2. 候选卡片流程
+
+- 新增 card_candidates 表（pending/validate 流程）。
+- /api/cards/generate 生成候选卡片并写入 card_candidates。
+- /api/cards/pending /api/cards/validate/batch /api/cards/batch-assign-deck 全部恢复。
+- /api/cards/batch 用于批量写入 flashcards。
+
+### 3. 卡片组与分析接口
+
+- /api/decks/:id 恢复，返回卡片组详情与卡片列表。
+- /api/analytics/heatmap 与 /api/analytics/summary 恢复。
+
+### 4. API 类型对齐
+
+- LogReviewRequest grade 范围调整为 0-5。
+- keywordId 允许为 null（未绑定关键词的卡片）。
+- review 的 deckId 查询参数改为 UUID string。

@@ -103,10 +103,24 @@ export function buildTocTree(sections: Section[], blocks: Paragraph[]): TOCNode[
 ### 8. 旧接口与新结构的过渡说明
 
 - **SQL-new 结构已成为主结构**：`documents` / `text_blocks` / `sections` / `keywords` / `decks` / `flashcards`。
-- **旧学习流接口已暂时停用**（返回 501）：
-  - `/api/cards/*`、`/api/reviews/*`、`/api/analytics/*`
-- **说明**：`/api/decks` 已按新结构恢复（GET/POST）。
-- **原因**：旧表（`cards` / `review_logs` / 旧 `decks`）已与新的 UUID/section 结构不兼容，等待新的 flashcards/decks tree API 接入。
+- **说明**：旧接口已逐步恢复并迁移到 SQL-new 结构：
+  - `/api/cards/generate`：生成候选卡片并写入 `card_candidates`
+  - `/api/cards/pending`：拉取待校验卡片
+  - `/api/cards/validate/batch`：批量校验（保留/编辑/丢弃）
+  - `/api/cards/batch-assign-deck`：批量分配到 deck 并写入 `flashcards`
+  - `/api/cards/batch`：批量写入 `flashcards`
+  - `/api/reviews/due`：到期卡片拉取（含 todayReviewed 统计）
+  - `/api/reviews/log`：记录复习并更新 SM-2
+  - `/api/analytics/heatmap`：热力图数据
+  - `/api/analytics/summary`：统计摘要
+  - `/api/decks/:id`：卡片组详情 + 卡片列表
+
+### 8.1 候选卡片与校验流程
+
+- `POST /api/cards/generate` 输出候选卡片并写入 `card_candidates`。
+- `GET /api/cards/pending` 返回待校验候选卡片。
+- `PUT /api/cards/validate/batch` 将候选卡片标记为 `active` 或 `discarded`。
+- `PATCH /api/cards/batch-assign-deck` 把 `active` 候选卡片写入 `flashcards` 并清理候选。
 
 ### 9. 测试
 
@@ -119,3 +133,11 @@ export function buildTocTree(sections: Section[], blocks: Paragraph[]): TOCNode[
 - `DEEPSEEK_API_KEY=your_api_key_here`
 - `PORT=4000`
 - `JWT_SECRET=dev-secret-change-me`
+
+### 11. 近期更新（2026-03-15）
+
+- 复习系统：完成 `/api/reviews/due` 与 `/api/reviews/log`（SM-2 实现见 `src/utils/sm2.ts`）。
+- 生成系统：完成 `/api/cards/generate`，并引入候选卡片表 `card_candidates`。
+- 校验与入库：完成 `/api/cards/pending`、`/api/cards/validate/batch`、`/api/cards/batch-assign-deck`、`/api/cards/batch`。
+- 卡片组详情：完成 `/api/decks/:id`。
+- 学习分析：完成 `/api/analytics/heatmap` 与 `/api/analytics/summary`。

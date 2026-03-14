@@ -39,6 +39,12 @@ CREATE USER srs_user WITH PASSWORD 'srs_password';
 GRANT ALL PRIVILEGES ON DATABASE srs_db TO srs_user;
 ```
 
+如使用 SQL 脚本初始化/迁移（新增）：
+
+- `lib/db/sql/flashcards-sm2-add.sql`
+- `lib/db/sql/review-logs-add.sql`
+- `lib/db/sql/card-candidates-add.sql`
+
 后端通过以下连接串访问数据库：
 
 ```bash
@@ -116,3 +122,10 @@ http://localhost:5173/
 ```
 
 若页面正常加载且无构建时报错，即表示数据库、后端与前端已在本地成功联动运行。
+
+---
+
+## 6. 近期更新提示（2026-03-15）
+
+- 复习系统（/api/reviews/*）、候选卡片流程（/api/cards/*）已恢复。
+- 新增分析统计接口：/api/analytics/heatmap 与 /api/analytics/summary。

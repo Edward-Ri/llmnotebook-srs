@@ -15,7 +15,7 @@
 
 ### 3. Drizzle Schema（已与 SQL-new 对齐）
 
-> 当前 Drizzle schema 已对齐 SQL-new 结构（UUID 主键、section/flashcard 关系）。旧表（`cards` / `review_logs` / 旧 `decks`）已从 schema 中移除。
+> 当前 Drizzle schema 已对齐 SQL-new 结构（UUID 主键、section/flashcard 关系）。
 
 #### 3.1 用户表（`src/schema/users.ts`）
 
@@ -88,6 +88,33 @@
 | source_text_block_id | uuid | NULL, FK → text_blocks.id | 来源段落 |
 | front_content | text | NOT NULL | 正面内容 |
 | back_content | text | NOT NULL | 背面内容 |
+| repetition | int | NOT NULL, default 0 | SM-2 重复次数 |
+| interval | int | NOT NULL, default 0 | SM-2 间隔天数 |
+| ease_factor | real | NOT NULL, default 2.5 | SM-2 简易度 |
+| next_review_date | timestamp | NOT NULL, default now() | 下次复习时间 |
+| created_at | timestamp | NOT NULL, default now() | 创建时间 |
+
+#### 3.8 Review Logs（`src/schema/reviewLogs.ts`）
+
+| 列名 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | serial | PK | 复习记录 ID |
+| user_id | uuid | FK → users.id | 归属用户 |
+| card_id | uuid | FK → flashcards.id | 关联卡片 |
+| grade | int | NOT NULL | 评分 |
+| created_at | timestamp | NOT NULL, default now() | 创建时间 |
+
+#### 3.9 Card Candidates（`src/schema/cardCandidates.ts`）
+
+| 列名 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | uuid | PK | 候选卡片 ID |
+| user_id | uuid | FK → users.id | 归属用户 |
+| document_id | uuid | FK → documents.id | 来源文档 |
+| keyword_id | uuid | FK → keywords.id | 来源关键词（可空） |
+| front_content | text | NOT NULL | 正面内容 |
+| back_content | text | NOT NULL | 背面内容 |
+| status | varchar(20) | NOT NULL | 校验状态 |
 | created_at | timestamp | NOT NULL, default now() | 创建时间 |
 
 ### 4. SQL-new 表结构（PostgreSQL 层）
@@ -98,7 +125,10 @@ SQL 层与 Drizzle 已对齐，主要脚本位于：
 - `lib/db/sql/keywords-add.sql`
 - `lib/db/sql/decks-tree-add.sql`
 - `lib/db/sql/flashcards-add.sql`
+- `lib/db/sql/flashcards-sm2-add.sql`
 - `lib/db/sql/users-add.sql`
+- `lib/db/sql/review-logs-add.sql`
+- `lib/db/sql/card-candidates-add.sql`
 
 > 以上脚本用于初始化新结构，并由后端 `POST /api/documents/analyze` 写入数据。
 
@@ -115,8 +145,19 @@ SQL 层与 Drizzle 已对齐，主要脚本位于：
 - **Deck → Flashcard**：`flashcards.deck_id`（ON DELETE RESTRICT）
 - **Keyword → Flashcard（可选）**：`flashcards.source_keyword_id`（ON DELETE SET NULL）
 - **TextBlock → Flashcard（可选）**：`flashcards.source_text_block_id`（ON DELETE SET NULL）
+- **User → ReviewLog**：`review_logs.user_id`（ON DELETE CASCADE）
+- **Flashcard → ReviewLog**：`review_logs.card_id`（ON DELETE CASCADE）
+- **User → CardCandidate**：`card_candidates.user_id`（ON DELETE CASCADE）
+- **Document → CardCandidate**：`card_candidates.document_id`（ON DELETE CASCADE）
+- **Keyword → CardCandidate**：`card_candidates.keyword_id`（ON DELETE SET NULL）
 
 ### 6. 旧表与兼容性
 
-- 旧版 `cards` / `review_logs` / 旧 `decks` 已从 Drizzle schema 移除。
-- 后端旧接口（`/api/cards/*`、`/api/reviews/*`、`/api/analytics/*`、`/api/decks/*`）当前返回 501，等待基于 SQL-new 的 flashcards/decks tree API 接入。
+- 旧版 `cards` 已不再用于新链路（仍在仓库中，待迁移/清理）。
+- `review_logs` 已切换为 UUID 外键并新增 `user_id`。
+
+### 7. 近期更新（2026-03-15）
+
+- flashcards 增加 SM-2 字段（repetition/interval/ease_factor/next_review_date）。
+- review_logs 增加 user_id。
+- 新增 card_candidates 表，支撑“候选卡片→校验→入库”流程。

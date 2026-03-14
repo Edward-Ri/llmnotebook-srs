@@ -9,7 +9,7 @@
   - 学习统计与可视化分析（旧流转）
   - 用户注册登录与会话管理展示
 
-> 说明：后端已迁移到 SQL-new 结构，旧的 cards/reviews/analytics 接口暂时返回 501，前端对应页面处于“占位/待迁移”状态；`/decks` 与 `/documents` 已按新结构可用。
+> 说明：后端已迁移到 SQL-new 结构，cards/reviews/analytics 接口已恢复并对齐 UUID 结构；`/decks` 与 `/documents` 已按新结构可用。
 
 ### 2. 技术栈与依赖
 
@@ -63,17 +63,19 @@
 - **关键联动**：
   - 展开章节 → 左侧滚动定位
   - 点击关键词 → 高亮与选中状态同步
+  - 生成候选卡片后跳转 `/validate?documentId=...`
 
 #### 4.2 总览面板（Dashboard）
 
 - 文件：`src/pages/dashboard.tsx`
 - 拉取 `GET /api/documents` 与 `GET /api/decks` 渲染“我的文档列表 / 我的卡片组列表”
+- 支持阅读材料与卡片组删除
 - 新建材料与卡片组创建后，使用 `setLocation` 跳转至详情页
 
 #### 4.3 新建阅读材料（Notebook 风格）
 
 - 文件：`src/pages/material-new.tsx`
-- 使用 `useAnalyzeDocument` 提交内容，成功后跳转 `/materials/:id`。
+- 先 `POST /api/documents` 创建文档，再 `POST /api/documents/analyze` 分析；成功后跳转 `/materials/:id`。
 
 #### 4.4 阅读材料详情
 
@@ -84,18 +86,20 @@
 
 - `validate.tsx` / `analytics.tsx` / `deck-detail.tsx`
 - `review.tsx` 已从路由中移除（统一入口调整为专属详情页）。
-- 旧的 `cards/reviews/analytics` API 当前返回 501，相关页面需迁移到新的 flashcards/decks tree API 后才能恢复。
+- cards/reviews/analytics API 已恢复；`validate` 走候选卡片流程，`review` 走 SM-2 复习。
 
 ### 5. 认证逻辑（AuthContext）
 
 - 文件：`src/contexts/AuthContext.tsx`
 - 通过 `/api/auth/me` 获取当前用户；使用 HTTP-only Cookie 维持会话。
 - `AuthUser`：`{ id: string; email: string }`
+  - 登录后会话保持不再在 `visibilitychange` 中强制登出。
 
 ### 6. 与后端的交互约定
 
 - API 全部通过 `@workspace/api-client-react` hooks 调用。
 - 关键词、文档、卡片等 ID 在新结构下均为 **UUID 字符串**。
+  - `keywordId` 允许为 `null`。
 
 ### 7. 本地开发与代理
 
@@ -107,3 +111,10 @@ API_TARGET=http://localhost:4000 pnpm dev
 ```
 
 - 否则前端会请求错误的后端端口，导致 404/500 与日志缺失。
+
+### 8. 近期更新（2026-03-15）
+
+- `dashboard` 接入真实文档列表与删除入口。
+- `material-new` 改为“先创建文档再分析”。
+- `analyze` 在生成卡片后跳转到带 documentId 的校验页。
+- `validate` 只有选择卡片组后才允许提交保留卡片。
