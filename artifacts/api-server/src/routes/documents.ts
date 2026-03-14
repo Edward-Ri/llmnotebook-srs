@@ -277,6 +277,29 @@ router.get("/", requireAuth, async (req, res) => {
   res.json({ documents: result });
 });
 
+router.delete("/:documentId", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const documentId = req.params.documentId;
+
+    const [doc] = await db
+      .select({ id: documentsTable.id })
+      .from(documentsTable)
+      .where(and(eq(documentsTable.id, documentId), eq(documentsTable.userId, userId)))
+      .limit(1);
+
+    if (!doc) {
+      return res.status(404).json({ error: "阅读材料不存在" });
+    }
+
+    await db.delete(documentsTable).where(eq(documentsTable.id, documentId));
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("Delete document failed", error);
+    return res.status(500).json({ error: "删除阅读材料失败" });
+  }
+});
+
 router.get("/:documentId/keywords", requireAuth, async (req, res) => {
   const userId = getUserId(req);
   const documentId = req.params.documentId;

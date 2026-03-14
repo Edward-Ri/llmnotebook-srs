@@ -2,13 +2,15 @@ import { useState, useRef, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
 import { BookOpen, Plus, Upload, FileText, ArrowLeft, Wand2 } from "lucide-react";
-import { useAnalyzeDocument } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
+import { getListDocumentsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function NewMaterialNotebook() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [title, setTitle] = useState("Untitled notebook");
   const [content, setContent] = useState("");
@@ -16,7 +18,18 @@ export default function NewMaterialNotebook() {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const analyzeMutation = useAnalyzeDocument();
+  const parseErrorMessage = async (res: Response) => {
+    const raw = await res.text();
+    try {
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        return data.map((item) => item?.message).filter(Boolean).join("；") || raw;
+      }
+      return data?.message ?? data?.error ?? raw;
+    } catch {
+      return raw || "请求失败";
+    }
+  };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -37,16 +50,37 @@ export default function NewMaterialNotebook() {
     }
     setIsImporting(true);
     try {
-      const res = await analyzeMutation.mutateAsync({
-        data: { title: title || "未命名文档", content },
+      const createRes = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title || "未命名文档" }),
       });
+      if (!createRes.ok) {
+        throw new Error(await parseErrorMessage(createRes));
+      }
+      const created = await createRes.json();
+      const documentId = created?.document?.id;
+      if (!documentId) {
+        throw new Error("创建文档失败：缺少 documentId");
+      }
+
+      const analyzeRes = await fetch("/api/documents/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentId, text: content }),
+      });
+      if (!analyzeRes.ok) {
+        throw new Error(await parseErrorMessage(analyzeRes));
+      }
+      const res = await analyzeRes.json();
 
       toast({
         title: "Notebook 已创建",
         description: "已为该 Notebook 提取初始关键词，可以继续在详情页操作。",
       });
 
-      setLocation(`/materials/${res.documentId}`);
+      await queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      setLocation(`/materials/${res.documentId ?? documentId}`);
     } catch (err: any) {
       toast({
         title: "导入失败",
@@ -212,4 +246,3 @@ export default function NewMaterialNotebook() {
     </div>
   );
 }
-

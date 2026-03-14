@@ -3,7 +3,20 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, History, MoreHorizontal, Sparkles, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { useListDecks } from "@workspace/api-client-react";
+import {
+  getListDecksQueryKey,
+  getListDocumentsQueryKey,
+  useListDecks,
+  useListDocuments,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type NotebookTab = "all" | "materials" | "decks" | "history";
 
@@ -38,6 +51,15 @@ type DeckNode = {
   updatedAt?: string;
 };
 
+type DocumentItem = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  keywordCount?: number;
+  cardCount?: number;
+};
+
 const FEATURED_DECKS: FeaturedDeck[] = [
   {
     id: "foundations",
@@ -67,22 +89,6 @@ const FEATURED_DECKS: FeaturedDeck[] = [
 
 const RECENT_ITEMS: RecentItem[] = [
   {
-    id: "m1",
-    type: "material",
-    title: "NotebookLM 设计语言拆解",
-    subtitle: "产品拆解 · 12 个关键词",
-    updatedAt: "刚刚",
-    href: "/materials/1",
-  },
-  {
-    id: "m2",
-    type: "material",
-    title: "Spacing effect 经典论文",
-    subtitle: "论文 · 8 个高价值段落",
-    updatedAt: "昨天",
-    href: "/materials/2",
-  },
-  {
     id: "h1",
     type: "history",
     title: "昨日复习完成 · 32 张",
@@ -102,6 +108,9 @@ const TABS: { key: NotebookTab; label: string }[] = [
 export default function Dashboard() {
   const [tab, setTab] = useState<NotebookTab>("all");
   const { data: decksData, isLoading: isDecksLoading } = useListDecks();
+  const { data: documentsData, isLoading: isDocumentsLoading } = useListDocuments();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const deckItems = useMemo(() => {
     const deckNodes = (decksData?.decks ?? []) as DeckNode[];
@@ -142,13 +151,66 @@ export default function Dashboard() {
   }, [decksData]);
 
   const filteredItems = useMemo(() => {
-    const merged = [...RECENT_ITEMS, ...deckItems];
+    const materialItems = (documentsData?.documents ?? []).map((doc: DocumentItem) => {
+      const keywordCount = doc.keywordCount ?? 0;
+      const cardCount = doc.cardCount ?? 0;
+      const subtitle = `阅读材料 · ${keywordCount} 关键词 · ${cardCount} 卡片`;
+      return {
+        id: doc.id,
+        type: "material" as const,
+        title: doc.title,
+        subtitle,
+        updatedAt: new Date(doc.createdAt).toLocaleString(),
+        sortAt: Date.parse(doc.createdAt),
+        href: `/materials/${doc.id}`,
+      };
+    });
+
+    const merged = [...RECENT_ITEMS, ...materialItems, ...deckItems];
     if (tab === "all") return merged;
-    if (tab === "materials") return merged.filter((item) => item.type === "material");
+    if (tab === "materials") return materialItems;
     if (tab === "decks") return deckItems;
     if (tab === "history") return merged.filter((item) => item.type === "history");
     return merged;
-  }, [deckItems, tab]);
+  }, [deckItems, documentsData, tab]);
+
+  const handleDeleteDeck = async (deckId: string, title: string) => {
+    if (!window.confirm(`确定删除卡片组“${title}”吗？此操作不可撤销。`)) return;
+    try {
+      const res = await fetch(`/api/decks/${deckId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "删除卡片组失败");
+      }
+      await queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
+      toast({ title: "已删除卡片组", description: title });
+    } catch (error: any) {
+      toast({
+        title: "删除失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteMaterial = async (materialId: string, title: string) => {
+    if (!window.confirm(`确定删除阅读材料“${title}”吗？此操作不可撤销。`)) return;
+    try {
+      const res = await fetch(`/api/documents/${materialId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "删除阅读材料失败");
+      }
+      await queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      toast({ title: "已删除阅读材料", description: title });
+    } catch (error: any) {
+      toast({
+        title: "删除失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -266,6 +328,16 @@ export default function Dashboard() {
               transition={{ duration: 0.18 }}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
             >
+              {tab === "materials" && isDocumentsLoading && (
+                <div className="col-span-full rounded-2xl border border-border/60 bg-card/60 p-6 text-sm text-muted-foreground">
+                  正在加载你的阅读材料…
+                </div>
+              )}
+              {tab === "materials" && !isDocumentsLoading && filteredItems.length === 0 && (
+                <div className="col-span-full rounded-2xl border border-border/60 bg-card/60 p-6 text-sm text-muted-foreground">
+                  还没有阅读材料，先去添加一篇吧。
+                </div>
+              )}
               {tab === "decks" && isDecksLoading && (
                 <div className="col-span-full rounded-2xl border border-border/60 bg-card/60 p-6 text-sm text-muted-foreground">
                   正在加载你的卡片组…
@@ -306,13 +378,61 @@ export default function Dashboard() {
                         </h3>
                         <p className="text-xs text-muted-foreground line-clamp-2">{item.subtitle}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => e.preventDefault()}
-                        className="mt-1 rounded-full p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/80"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
+                      {item.type === "deck" ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.preventDefault()}
+                              className="mt-1 rounded-full p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/80"
+                              aria-label="卡片组操作"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void handleDeleteDeck(item.id, item.title);
+                              }}
+                            >
+                              删除卡片组
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : item.type === "material" ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.preventDefault()}
+                              className="mt-1 rounded-full p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/80"
+                              aria-label="阅读材料操作"
+                            >
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void handleDeleteMaterial(item.id, item.title);
+                              }}
+                            >
+                              删除阅读材料
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => e.preventDefault()}
+                          className="mt-1 rounded-full p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/80"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                     <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
                       <span>{item.updatedAt}</span>
