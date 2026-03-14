@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request } from "express";
 import { db } from "@workspace/db";
 import { decksTable, flashcardsTable, keywordsTable, reviewLogsTable } from "@workspace/db/schema";
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, count, eq, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { z } from "zod";
 import { calculateSM2 } from "../utils/sm2";
@@ -50,6 +50,21 @@ router.get("/due", requireAuth, async (req, res) => {
       .where(and(...conditions))
       .orderBy(asc(flashcardsTable.nextReviewDate), asc(flashcardsTable.createdAt));
 
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayReviewed = await db
+      .select({ count: count() })
+      .from(reviewLogsTable)
+      .leftJoin(flashcardsTable, eq(reviewLogsTable.cardId, flashcardsTable.id))
+      .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
+      .where(
+        and(
+          eq(decksTable.userId, userId),
+          gte(reviewLogsTable.createdAt, todayStart),
+          ...(deckId ? [eq(flashcardsTable.deckId, deckId)] : []),
+        ),
+      );
+
     const cards = rows.map((row) => ({
       id: row.id,
       frontContent: row.frontContent,
@@ -66,7 +81,7 @@ router.get("/due", requireAuth, async (req, res) => {
     return res.json({
       cards,
       total: cards.length,
-      todayReviewed: 0,
+      todayReviewed: Number(todayReviewed[0]?.count ?? 0),
     });
   } catch (error) {
     console.error("Get due cards failed", error);
