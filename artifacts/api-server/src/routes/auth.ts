@@ -3,10 +3,9 @@ import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { signToken, verifyToken } from "../middlewares/auth";
+import { COOKIE_NAME, requireAuth, signToken } from "../middlewares/auth";
 
 const router: IRouter = Router();
-const COOKIE_NAME = "srs_token";
 const COOKIE_OPTS = {
   httpOnly: true,
   sameSite: "lax" as const,
@@ -58,12 +57,9 @@ router.post("/login", async (req, res) => {
   return res.json({ user: { id: user.id, email: user.email } });
 });
 
-router.get("/me", (req, res) => {
-  const token = req.cookies?.[COOKIE_NAME];
-  if (!token) return res.status(401).json({ error: "未登录" });
-  const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "会话已过期，请重新登录" });
-  return res.json({ user: { id: payload.userId, email: payload.email } });
+router.get("/me", requireAuth, (req, res) => {
+  const user = (req as typeof req & { user: { userId: string; email: string } }).user;
+  return res.json({ user: { id: user.userId, email: user.email } });
 });
 
 router.post("/logout", (_req, res) => {
