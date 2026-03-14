@@ -9,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication and session
   - name: documents
     description: Document and keyword operations
   - name: cards
@@ -32,6 +34,83 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: 用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+
+  /auth/guest:
+    post:
+      operationId: guest
+      tags: [auth]
+      summary: 创建访客会话
+      responses:
+        "200":
+          description: 访客 token 与用户信息
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestAuthResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: 获取当前用户
+      responses:
+        "200":
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: 退出登录
+      responses:
+        "200":
+          description: 退出结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResponse"
 
   /documents/analyze:
     post:
@@ -295,6 +374,67 @@ components:
           type: string
       required:
         - status
+
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+      required:
+        - id
+        - email
+
+    AuthUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+      required:
+        - user
+
+    GuestAuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/AuthUser"
+      required:
+        - token
+        - user
+
+    LogoutResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
 
     AnalyzeDocumentRequest:
       type: object

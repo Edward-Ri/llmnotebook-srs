@@ -15,6 +15,64 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary 用户注册
+ */
+export const RegisterBody = zod.object({
+  email: zod.string(),
+  password: zod.string(),
+});
+
+export const RegisterResponse = zod.object({
+  user: zod.object({
+    id: zod.string().uuid(),
+    email: zod.string(),
+  }),
+});
+
+/**
+ * @summary 用户登录
+ */
+export const LoginBody = zod.object({
+  email: zod.string(),
+  password: zod.string(),
+});
+
+export const LoginResponse = zod.object({
+  user: zod.object({
+    id: zod.string().uuid(),
+    email: zod.string(),
+  }),
+});
+
+/**
+ * @summary 创建访客会话
+ */
+export const GuestResponse = zod.object({
+  token: zod.string(),
+  user: zod.object({
+    id: zod.string().uuid(),
+    email: zod.string(),
+  }),
+});
+
+/**
+ * @summary 获取当前用户
+ */
+export const GetMeResponse = zod.object({
+  user: zod.object({
+    id: zod.string().uuid(),
+    email: zod.string(),
+  }),
+});
+
+/**
+ * @summary 退出登录
+ */
+export const LogoutResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * @summary 分析文档并提取关键词
  */
 export const AnalyzeDocumentBody = zod.object({
