@@ -49,7 +49,7 @@ router.post("/", requireAuth, async (req, res) => {
   const [doc] = await db.insert(documentsTable).values({
     title: typeof title === "string" && title.trim().length > 0
       ? title.trim()
-      : `文档 ${new Date().toLocaleDateString("zh-CN")}`,
+      : "未命名阅读材料",
     userId,
   }).returning();
 

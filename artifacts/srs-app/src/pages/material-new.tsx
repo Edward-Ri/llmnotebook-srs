@@ -11,7 +11,7 @@ export default function NewMaterialNotebook() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [title, setTitle] = useState("Untitled notebook");
+  const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   const parseErrorMessage = async (res: Response) => {
@@ -28,12 +28,13 @@ export default function NewMaterialNotebook() {
   };
 
   const handleCreate = async () => {
+    const normalizedTitle = title.trim() || "未命名阅读材料";
     setIsCreating(true);
     try {
       const createRes = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title || "未命名文档" }),
+        body: JSON.stringify({ title: normalizedTitle }),
       });
       if (!createRes.ok) {
         throw new Error(await parseErrorMessage(createRes));
@@ -82,6 +83,7 @@ export default function NewMaterialNotebook() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                placeholder="输入阅读材料标题"
                 className="bg-transparent p-0 text-xl font-semibold tracking-tight outline-none focus:ring-0 md:text-2xl"
               />
               <p className="mt-1 text-xs text-muted-foreground md:text-sm">
