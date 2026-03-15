@@ -120,3 +120,19 @@ API_TARGET=http://localhost:<port> pnpm dev
 psql "$DATABASE_URL" -Atc "select to_regclass('public.card_candidates');"
 psql "$DATABASE_URL" -Atc "select to_regclass('public.review_logs');"
 ```
+
+---
+
+## 7. 复习后统计为空排查
+
+- 症状：
+  - 复习完成后进入卡片组详情提示“无法加载卡片组详情”
+  - Dashboard 的“今日已背诵”始终为 0
+  - Analytics 热力图/总复习数无变化
+- 排查建议：
+  - 确认前端请求包含 `Authorization: Bearer <guest_token>`（访客模式）与 `x-tz-offset-minutes` 头
+  - 确认前端未在页面跳转时触发自动登出（`beforeunload -> /api/auth/logout`）
+  - 确认后端使用本地时区日界线进行统计（`reviews/decks/analytics` 统一走 `src/utils/timezone.ts`）
+- 快速验证：
+  - 先在 `/review` 完成 1 张卡片评分
+  - 再访问 `/api/reviews/due`、`/api/decks/:id`、`/api/analytics/summary`，确认 `todayReviewed/reviewedToday/todayReviews` 有增量
