@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BrainCircuit, LayoutDashboard, CheckSquare, BarChart3, Plus } from "lucide-react";
+import { BrainCircuit, LayoutDashboard, BarChart3, Plus } from "lucide-react";
 
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { getListDecksQueryKey, useCreateDeck } from "@workspace/api-client-react";
@@ -19,7 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 import { AuthModal } from "@/components/AuthModal";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
-import Validate from "@/pages/validate";
 import Analytics from "@/pages/analytics";
 import MaterialDetail from "@/pages/material-detail";
 import DeckDetail from "@/pages/deck-detail";
@@ -38,7 +37,6 @@ const queryClient = new QueryClient({
 
 const NAV_ITEMS = [
   { title: "总览面板", url: "/", icon: LayoutDashboard },
-  { title: "卡片校验", url: "/validate", icon: CheckSquare },
   { title: "学习分析", url: "/analytics", icon: BarChart3 },
 ];
 
@@ -171,7 +169,6 @@ function Router() {
       <Route path="/materials/new" component={NewMaterialNotebook} />
       <Route path="/materials/:id" component={MaterialDetail} />
       <Route path="/decks/:id" component={DeckDetail} />
-      <Route path="/validate" component={Validate} />
       <Route path="/analytics" component={Analytics} />
       <Route component={NotFound} />
     </Switch>

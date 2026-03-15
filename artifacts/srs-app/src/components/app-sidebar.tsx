@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   BarChart3,
   BrainCircuit,
-  CheckSquare,
   LayoutDashboard,
   LogOut,
   User,
@@ -26,7 +25,6 @@ import { AuthModal } from "@/components/AuthModal";
 
 const NAV_ITEMS = [
   { title: "总览面板", url: "/", icon: LayoutDashboard },
-  { title: "卡片校验", url: "/validate", icon: CheckSquare },
   { title: "间隔复习", url: "/review", icon: BrainCircuit },
   { title: "学习分析", url: "/analytics", icon: BarChart3 },
 ];
