@@ -334,6 +334,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeckDetail"
+    patch:
+      operationId: updateDeck
+      tags: [decks]
+      summary: 更新卡片组名称或父级
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeckRequest"
+      responses:
+        "200":
+          description: 更新后的卡片组摘要
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckSummary"
+    delete:
+      operationId: deleteDeck
+      tags: [decks]
+      summary: 删除卡片组；若子树为空则递归删除空子组
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutResponse"
 
   /reviews/log:
     post:
@@ -695,6 +737,10 @@ components:
           type: string
         description:
           type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
         createdAt:
           type: string
         updatedAt:
@@ -703,13 +749,25 @@ components:
           type: integer
         dueCards:
           type: integer
+        newCards:
+          type: integer
+        reviewedToday:
+          type: integer
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckSummary"
       required:
         - id
         - name
+        - parentId
         - createdAt
         - updatedAt
         - totalCards
         - dueCards
+        - newCards
+        - reviewedToday
+        - children
 
     DeckListResponse:
       type: object
@@ -771,6 +829,10 @@ components:
           type: integer
         dueCards:
           type: integer
+        newCards:
+          type: integer
+        reviewedToday:
+          type: integer
         cards:
           type: array
           items:
@@ -782,6 +844,8 @@ components:
         - updatedAt
         - totalCards
         - dueCards
+        - newCards
+        - reviewedToday
         - cards
 
     CreateDeckRequest:
@@ -791,8 +855,22 @@ components:
           type: string
         description:
           type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
       required:
         - name
+
+    UpdateDeckRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
 
     BatchAssignDeckRequest:
       type: object

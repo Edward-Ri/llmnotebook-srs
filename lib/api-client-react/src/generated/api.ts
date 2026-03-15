@@ -42,6 +42,7 @@ import type {
   LogoutResponse,
   RegisterRequest,
   ReviewLogResponse,
+  UpdateDeckRequest,
   UpdateKeywordsRequest,
   ValidateCardsBatchRequest,
 } from "./api.schemas";
@@ -1476,12 +1477,12 @@ export const useCreateDeck = <
 /**
  * @summary 获取单个卡片组详情
  */
-export const getGetDeckUrl = (id: number) => {
+export const getGetDeckUrl = (id: string) => {
   return `/api/decks/${id}`;
 };
 
 export const getDeck = async (
-  id: number,
+  id: string,
   options?: RequestInit,
 ): Promise<DeckDetail> => {
   return customFetch<DeckDetail>(getGetDeckUrl(id), {
@@ -1490,7 +1491,7 @@ export const getDeck = async (
   });
 };
 
-export const getGetDeckQueryKey = (id: number) => {
+export const getGetDeckQueryKey = (id: string) => {
   return [`/api/decks/${id}`] as const;
 };
 
@@ -1498,7 +1499,7 @@ export const getGetDeckQueryOptions = <
   TData = Awaited<ReturnType<typeof getDeck>>,
   TError = ErrorType<unknown>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getDeck>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
@@ -1535,7 +1536,7 @@ export function useGetDeck<
   TData = Awaited<ReturnType<typeof getDeck>>,
   TError = ErrorType<unknown>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<Awaited<ReturnType<typeof getDeck>>, TError, TData>;
     request?: SecondParameter<typeof customFetch>;
@@ -1549,6 +1550,177 @@ export function useGetDeck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary 更新卡片组名称或父级
+ */
+export const getUpdateDeckUrl = (id: string) => {
+  return `/api/decks/${id}`;
+};
+
+export const updateDeck = async (
+  id: string,
+  updateDeckRequest: UpdateDeckRequest,
+  options?: RequestInit,
+): Promise<DeckSummary> => {
+  return customFetch<DeckSummary>(getUpdateDeckUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateDeckRequest),
+  });
+};
+
+export const getUpdateDeckMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDeck>>,
+    TError,
+    { id: string; data: BodyType<UpdateDeckRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDeck>>,
+  TError,
+  { id: string; data: BodyType<UpdateDeckRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateDeck"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDeck>>,
+    { id: string; data: BodyType<UpdateDeckRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDeck(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDeckMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDeck>>
+>;
+export type UpdateDeckMutationBody = BodyType<UpdateDeckRequest>;
+export type UpdateDeckMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 更新卡片组名称或父级
+ */
+export const useUpdateDeck = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDeck>>,
+    TError,
+    { id: string; data: BodyType<UpdateDeckRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDeck>>,
+  TError,
+  { id: string; data: BodyType<UpdateDeckRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateDeckMutationOptions(options));
+};
+
+/**
+ * @summary 删除卡片组；若子树为空则递归删除空子组
+ */
+export const getDeleteDeckUrl = (id: string) => {
+  return `/api/decks/${id}`;
+};
+
+export const deleteDeck = async (
+  id: string,
+  options?: RequestInit,
+): Promise<LogoutResponse> => {
+  return customFetch<LogoutResponse>(getDeleteDeckUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDeckMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDeck>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDeck>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteDeck"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDeck>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDeck(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDeckMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDeck>>
+>;
+
+export type DeleteDeckMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 删除卡片组；若子树为空则递归删除空子组
+ */
+export const useDeleteDeck = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDeck>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDeck>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteDeckMutationOptions(options));
+};
 
 /**
  * @summary 记录复习结果并更新SM-2参数

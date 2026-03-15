@@ -1,4 +1,4 @@
-import { index, integer, pgTable, uuid, varchar } from "drizzle-orm/pg-core";
+import { AnyPgColumn, index, integer, pgTable, uuid, varchar } from "drizzle-orm/pg-core";
 import { documentsTable } from "./documents";
 
 export const sectionsTable = pgTable(
@@ -8,7 +8,7 @@ export const sectionsTable = pgTable(
     documentId: uuid("document_id")
       .notNull()
       .references(() => documentsTable.id, { onDelete: "cascade" }),
-    parentSectionId: uuid("parent_section_id").references(() => sectionsTable.id, {
+    parentSectionId: uuid("parent_section_id").references((): AnyPgColumn => sectionsTable.id, {
       onDelete: "set null",
     }),
     heading: varchar("heading", { length: 255 }),
@@ -26,4 +26,3 @@ export const sectionsTable = pgTable(
 
 export type Section = typeof sectionsTable.$inferSelect;
 export type InsertSection = typeof sectionsTable.$inferInsert;
-

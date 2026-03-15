@@ -44,5 +44,6 @@ export * from "./registerRequest";
 export * from "./reviewLogResponse";
 export * from "./tOCKeyword";
 export * from "./tOCNode";
+export * from "./updateDeckRequest";
 export * from "./updateKeywordsRequest";
 export * from "./validateCardsBatchRequest";

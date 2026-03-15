@@ -255,7 +255,7 @@ export const BatchAssignDeckResponse = zod.object({
  * @summary 获取今日到期复习卡片
  */
 export const GetDueCardsQueryParams = zod.object({
-  deckId: zod.string().uuid().optional(),
+  deckId: zod.coerce.string().uuid().optional(),
 });
 
 export const GetDueCardsResponse = zod.object({
@@ -286,10 +286,14 @@ export const ListDecksResponse = zod.object({
       id: zod.string().uuid(),
       name: zod.string(),
       description: zod.string().optional(),
+      parentId: zod.string().uuid().nullable(),
       createdAt: zod.string(),
       updatedAt: zod.string(),
       totalCards: zod.number(),
       dueCards: zod.number(),
+      newCards: zod.number(),
+      reviewedToday: zod.number(),
+      children: zod.array(zod.unknown()),
     }),
   ),
 });
@@ -300,13 +304,14 @@ export const ListDecksResponse = zod.object({
 export const CreateDeckBody = zod.object({
   name: zod.string(),
   description: zod.string().optional(),
+  parentId: zod.string().uuid().nullish(),
 });
 
 /**
  * @summary 获取单个卡片组详情
  */
 export const GetDeckParams = zod.object({
-  id: zod.string().uuid(),
+  id: zod.coerce.string().uuid(),
 });
 
 export const GetDeckResponse = zod.object({
@@ -317,6 +322,8 @@ export const GetDeckResponse = zod.object({
   updatedAt: zod.string(),
   totalCards: zod.number(),
   dueCards: zod.number(),
+  newCards: zod.number(),
+  reviewedToday: zod.number(),
   cards: zod.array(
     zod.object({
       id: zod.string().uuid(),
@@ -330,6 +337,43 @@ export const GetDeckResponse = zod.object({
       documentTitle: zod.string().optional(),
     }),
   ),
+});
+
+/**
+ * @summary 更新卡片组名称或父级
+ */
+export const UpdateDeckParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const UpdateDeckBody = zod.object({
+  name: zod.string().optional(),
+  parentId: zod.string().uuid().nullish(),
+});
+
+export const UpdateDeckResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  description: zod.string().optional(),
+  parentId: zod.string().uuid().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  totalCards: zod.number(),
+  dueCards: zod.number(),
+  newCards: zod.number(),
+  reviewedToday: zod.number(),
+  children: zod.array(zod.unknown()),
+});
+
+/**
+ * @summary 删除卡片组；若子树为空则递归删除空子组
+ */
+export const DeleteDeckParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const DeleteDeckResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**

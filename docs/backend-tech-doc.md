@@ -58,10 +58,21 @@
 
 ### 6. 复习与统计
 
-- `GET /api/reviews/due`：基于 `next_review_date` 拉取到期卡片 + `todayReviewed`
+- `GET /api/reviews/due`：
+  - 支持 `deckId` 组内过滤
+  - 队列口径为 `New + Due`（`interval=0` 视为 New；`interval>0 且 next_review_date < 本地次日零点` 视为 Due）
+  - 返回 `newCount / dueCount / todayReviewed`，并随机混排卡片队列
 - `POST /api/reviews/log`：记录评分并更新 SM-2（`repetition/interval/easeFactor/nextReviewDate`）
-- `GET /api/analytics/heatmap`：最近 365 天复习热力图
-- `GET /api/analytics/summary`：总卡片、总复习、留存率、连续天数、平均评分
+- `GET /api/analytics/heatmap`：最近 365 天复习热力图（按本地时区分桶）
+- `GET /api/analytics/summary`：总卡片、总复习、今日复习、待复习、留存率、连续天数、平均评分（按本地时区计算）
+- `GET /api/decks`、`GET /api/decks/:id`：返回卡片组统计 `newCards / dueCards / reviewedToday`
+
+#### 6.1 时区边界与统计口径
+
+- 统一通过 `src/utils/timezone.ts` 处理时区偏移与本地日界线
+- 支持从 Query/Header 读取 `tzOffsetMinutes`
+- 前端约定请求头：`x-tz-offset-minutes`
+- 日界线计算使用 UTC 安全算法，避免服务端时区导致的跨日错判
 
 ### 7. 认证与会话
 
@@ -104,3 +115,5 @@
 - 卡片生成上下文改为关键词邻域抽取，减少冗余上下文。
 - 新增候选卡片结果过滤（长度/重复/相似度）提升可复习性。
 - 鉴权链路补充访客模式与 Bearer Token 回退支持。
+- 复习队列改为 `New + Due` 并补充 `newCount / dueCount / todayReviewed`。
+- 统计与卡片组看板改为按本地时区计算，修复跨日边界导致的“今日数据缺失”问题。

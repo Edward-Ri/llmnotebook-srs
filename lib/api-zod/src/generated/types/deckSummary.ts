@@ -10,8 +10,12 @@ export interface DeckSummary {
   id: string;
   name: string;
   description?: string;
+  parentId: string | null;
   createdAt: string;
   updatedAt: string;
   totalCards: number;
   dueCards: number;
+  newCards: number;
+  reviewedToday: number;
+  children: DeckSummary[];
 }

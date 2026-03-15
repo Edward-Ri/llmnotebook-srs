@@ -15,19 +15,45 @@ import { getLocalDayBounds, resolveTzOffsetMinutes } from "../utils/timezone";
 const router: IRouter = Router();
 const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
 
+type DeckTreeNode = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  children: DeckTreeNode[];
+  totalCards: number;
+  dueCards: number;
+  newCards: number;
+  reviewedToday: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function validateDeckName(name: unknown) {
+  if (!name || typeof name !== "string" || name.trim().length === 0) {
+    return { error: "卡片组名称不能为空" } as const;
+  }
+
+  const trimmedName = name.trim();
+  if (trimmedName.length > 100) {
+    return { error: "卡片组名称不能超过 100 个字符" } as const;
+  }
+
+  return { value: trimmedName } as const;
+}
+
+function sortDeckTree(nodes: DeckTreeNode[]) {
+  nodes.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  nodes.forEach((node) => sortDeckTree(node.children));
+}
+
 router.post("/", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
     const { name, parentId, parent_id } = req.body ?? {};
     const resolvedParentId = parentId ?? parent_id ?? null;
-
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
-      return res.status(400).json({ error: "卡片组名称不能为空" });
-    }
-
-    const trimmedName = name.trim();
-    if (trimmedName.length > 100) {
-      return res.status(400).json({ error: "卡片组名称不能超过 100 个字符" });
+    const validatedName = validateDeckName(name);
+    if ("error" in validatedName) {
+      return res.status(400).json({ error: validatedName.error });
     }
 
     if (resolvedParentId) {
@@ -44,7 +70,7 @@ router.post("/", requireAuth, async (req, res) => {
     const [deck] = await db
       .insert(decksTable)
       .values({
-        name: trimmedName,
+        name: validatedName.value,
         parentId: resolvedParentId,
         userId,
       })
@@ -55,10 +81,11 @@ router.post("/", requireAuth, async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    return res.json({
+    return res.status(201).json({
       id: deck.id,
       name: deck.name,
       parentId: deck.parentId,
+      children: [],
       totalCards: 0,
       dueCards: 0,
       newCards: 0,
@@ -156,33 +183,8 @@ router.get("/", requireAuth, async (req, res) => {
     prev.reviewedToday = Number(row.reviewed ?? 0);
   });
 
-  const nodes = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      parentId: string | null;
-      children: any[];
-      totalCards: number;
-      dueCards: number;
-      newCards: number;
-      reviewedToday: number;
-      createdAt: string;
-      updatedAt: string;
-    }
-  >();
-  const roots: {
-    id: string;
-    name: string;
-    parentId: string | null;
-    children: any[];
-    totalCards: number;
-    dueCards: number;
-    newCards: number;
-    reviewedToday: number;
-    createdAt: string;
-    updatedAt: string;
-  }[] = [];
+  const nodes = new Map<string, DeckTreeNode>();
+  const roots: DeckTreeNode[] = [];
 
   rows.forEach((row) => {
     const stats = statsByDeckId.get(row.id);
@@ -210,13 +212,99 @@ router.get("/", requireAuth, async (req, res) => {
     }
   });
 
+  sortDeckTree(roots);
   return res.json({ decks: roots });
+});
+
+router.patch("/:deckId", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const deckId = String(req.params.deckId);
+    const { name, parentId, parent_id } = req.body ?? {};
+    const nextParentId = parentId === undefined ? parent_id : parentId;
+
+    if (name === undefined && nextParentId === undefined) {
+      return res.status(400).json({ error: "缺少可更新字段" });
+    }
+
+    const rows = await db
+      .select({ id: decksTable.id, name: decksTable.name, parentId: decksTable.parentId })
+      .from(decksTable)
+      .where(eq(decksTable.userId, userId));
+
+    const decksById = new Map(rows.map((row) => [row.id, row]));
+    const deck = decksById.get(deckId);
+    if (!deck) {
+      return res.status(404).json({ error: "卡片组不存在" });
+    }
+
+    const updateValues: { name?: string; parentId?: string | null } = {};
+
+    if (name !== undefined) {
+      const validatedName = validateDeckName(name);
+      if ("error" in validatedName) {
+        return res.status(400).json({ error: validatedName.error });
+      }
+      updateValues.name = validatedName.value;
+    }
+
+    if (nextParentId !== undefined) {
+      const resolvedParentId = nextParentId ?? null;
+      if (resolvedParentId) {
+        if (resolvedParentId === deckId) {
+          return res.status(400).json({ error: "不能将卡片组移动到自身下" });
+        }
+
+        const parent = decksById.get(resolvedParentId);
+        if (!parent) {
+          return res.status(400).json({ error: "父级卡片组不存在" });
+        }
+
+        let cursor = parent.parentId ?? null;
+        while (cursor) {
+          if (cursor === deckId) {
+            return res.status(400).json({ error: "不能将卡片组移动到其子组下" });
+          }
+          cursor = decksById.get(cursor)?.parentId ?? null;
+        }
+      }
+
+      updateValues.parentId = resolvedParentId;
+    }
+
+    const [updatedDeck] = await db
+      .update(decksTable)
+      .set(updateValues)
+      .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
+      .returning();
+
+    if (!updatedDeck) {
+      return res.status(500).json({ error: "更新卡片组失败" });
+    }
+
+    const now = new Date().toISOString();
+    return res.json({
+      id: updatedDeck.id,
+      name: updatedDeck.name,
+      parentId: updatedDeck.parentId,
+      children: [],
+      totalCards: 0,
+      dueCards: 0,
+      newCards: 0,
+      reviewedToday: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (error) {
+    console.error("Update deck failed", error);
+    return res.status(500).json({ error: "更新卡片组失败" });
+  }
 });
 
 router.get("/:deckId", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
-    const deckId = req.params.deckId;
+    const deckId = String(req.params.deckId);
     const tzOffsetMinutes = resolveTzOffsetMinutes(req);
     const { dayStartUtc, nextDayStartUtc } = getLocalDayBounds(new Date(), tzOffsetMinutes);
 
@@ -301,35 +389,64 @@ router.get("/:deckId", requireAuth, async (req, res) => {
 router.delete("/:deckId", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
-    const deckId = req.params.deckId;
-
-    const [deck] = await db
-      .select({ id: decksTable.id })
+    const deckId = String(req.params.deckId);
+    const rows = await db
+      .select({ id: decksTable.id, parentId: decksTable.parentId })
       .from(decksTable)
-      .where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
-      .limit(1);
-
-    if (!deck) {
+      .where(eq(decksTable.userId, userId));
+    const decksById = new Map(rows.map((row) => [row.id, row]));
+    if (!decksById.has(deckId)) {
       return res.status(404).json({ error: "卡片组不存在" });
     }
 
-    const childCount = await db
-      .select({ count: count() })
-      .from(decksTable)
-      .where(and(eq(decksTable.parentId, deckId), eq(decksTable.userId, userId)));
-    if ((childCount[0]?.count ?? 0) > 0) {
-      return res.status(400).json({ error: "请先删除子卡片组" });
+    const childrenByParentId = new Map<string, string[]>();
+    rows.forEach((row) => {
+      if (!row.parentId) return;
+      const siblings = childrenByParentId.get(row.parentId) ?? [];
+      siblings.push(row.id);
+      childrenByParentId.set(row.parentId, siblings);
+    });
+
+    const subtreeIds: string[] = [];
+    const queue = [deckId];
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      if (!currentId) continue;
+      subtreeIds.push(currentId);
+      const children = childrenByParentId.get(currentId) ?? [];
+      queue.push(...children);
     }
 
     const cardCount = await db
       .select({ count: count() })
       .from(flashcardsTable)
-      .where(eq(flashcardsTable.deckId, deckId));
+      .where(inArray(flashcardsTable.deckId, subtreeIds));
     if ((cardCount[0]?.count ?? 0) > 0) {
-      return res.status(400).json({ error: "请先移除卡片组内卡片" });
+      return res.status(400).json({ error: "请先移除该卡片组及其子组内的卡片" });
     }
 
-    await db.delete(decksTable).where(eq(decksTable.id, deckId));
+    const depthById = new Map<string, number>();
+    const depthQueue: Array<{ id: string; depth: number }> = [{ id: deckId, depth: 0 }];
+    while (depthQueue.length > 0) {
+      const current = depthQueue.shift();
+      if (!current) continue;
+      depthById.set(current.id, current.depth);
+      const children = childrenByParentId.get(current.id) ?? [];
+      children.forEach((childId) => {
+        depthQueue.push({ id: childId, depth: current.depth + 1 });
+      });
+    }
+
+    const deleteOrder = [...subtreeIds].sort(
+      (a, b) => (depthById.get(b) ?? 0) - (depthById.get(a) ?? 0),
+    );
+
+    await db.transaction(async (tx) => {
+      for (const id of deleteOrder) {
+        await tx.delete(decksTable).where(eq(decksTable.id, id));
+      }
+    });
+
     return res.json({ ok: true });
   } catch (error) {
     console.error("Delete deck failed", error);

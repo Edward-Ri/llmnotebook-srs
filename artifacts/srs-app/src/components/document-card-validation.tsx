@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getGetPendingCardsQueryKey,
   getListDecksQueryKey,
@@ -54,6 +54,16 @@ export function DocumentCardValidation({
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [editFront, setEditFront] = useState("");
   const [editBack, setEditBack] = useState("");
+
+  const deckOptions = useMemo(() => {
+    const flattenDecks = (nodes: DeckSummary[], depth = 0): Array<DeckSummary & { depth: number }> =>
+      nodes.flatMap((node) => [
+        { ...node, depth },
+        ...flattenDecks(node.children ?? [], depth + 1),
+      ]);
+
+    return flattenDecks((decksData?.decks ?? []) as DeckSummary[]);
+  }, [decksData?.decks]);
 
   useEffect(() => {
     setCards(data?.cards ?? []);
@@ -232,9 +242,9 @@ export function DocumentCardValidation({
                   onChange={(e) => handleDeckChange(e.target.value)}
                 >
                   <option value="">请选择卡片组</option>
-                  {decksData?.decks.map((deck: DeckSummary) => (
+                  {deckOptions.map((deck) => (
                     <option key={deck.id} value={String(deck.id)}>
-                      {deck.name}（{deck.totalCards} 张）
+                      {`${"- ".repeat(deck.depth)}${deck.name}`}（{deck.totalCards} 张）
                     </option>
                   ))}
                   <option value="__new">新建卡片组…</option>

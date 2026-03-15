@@ -154,10 +154,14 @@ export interface DeckSummary {
   id: string;
   name: string;
   description?: string;
+  parentId: string | null;
   createdAt: string;
   updatedAt: string;
   totalCards: number;
   dueCards: number;
+  newCards: number;
+  reviewedToday: number;
+  children: DeckSummary[];
 }
 
 export interface DeckListResponse {
@@ -184,12 +188,20 @@ export interface DeckDetail {
   updatedAt: string;
   totalCards: number;
   dueCards: number;
+  newCards: number;
+  reviewedToday: number;
   cards: DeckCard[];
 }
 
 export interface CreateDeckRequest {
   name: string;
   description?: string;
+  parentId?: string | null;
+}
+
+export interface UpdateDeckRequest {
+  name?: string;
+  parentId?: string | null;
 }
 
 export type BatchAssignDeckRequestAssignmentsItem = {

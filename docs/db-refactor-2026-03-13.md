@@ -79,3 +79,14 @@
   - `lib/db/sql/card-candidates-add.sql`
   - `lib/db/sql/flashcards-sm2-add.sql`
   - `lib/db/sql/review-logs-add.sql`
+
+#### 6. 线上排错记录（补充）
+
+- 现象：完成复习后返回卡片组详情失败，且看板/分析页显示“今日无数据”
+- 根因（双因素叠加）：
+  - 前端页面跳转触发会话清理，导致复习后用户上下文切换
+  - 统计日界线计算受服务端时区影响，导致“今日”数据分桶错位
+- 处理：
+  - 前端移除 `beforeunload` 自动登出，复习完成改为 SPA 跳转
+  - 新增 `authedFetch`，统一附加 `Authorization` 与 `x-tz-offset-minutes`
+  - 后端 `timezone` 工具改为 UTC 安全算法，修正本地日界线计算

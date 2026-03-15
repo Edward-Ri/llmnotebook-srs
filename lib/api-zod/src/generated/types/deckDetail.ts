@@ -15,5 +15,7 @@ export interface DeckDetail {
   updatedAt: string;
   totalCards: number;
   dueCards: number;
+  newCards: number;
+  reviewedToday: number;
   cards: DeckCard[];
 }

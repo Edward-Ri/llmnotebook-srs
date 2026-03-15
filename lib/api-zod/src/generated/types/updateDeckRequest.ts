@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CreateDeckRequest {
-  name: string;
-  description?: string;
+export interface UpdateDeckRequest {
+  name?: string;
   parentId?: string | null;
 }
