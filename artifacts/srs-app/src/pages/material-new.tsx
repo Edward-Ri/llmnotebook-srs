@@ -74,21 +74,14 @@ export default function NewMaterialNotebook() {
                 <ArrowLeft className="w-4 h-4" />
               </Link>
             </Button>
-            <div>
-              <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>新建 Notebook</span>
-              </div>
+            <div className="min-w-0 flex-1">
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="输入阅读材料标题"
-                className="bg-transparent p-0 text-xl font-semibold tracking-tight outline-none focus:ring-0 md:text-2xl"
+                className="w-full bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60 focus:ring-0 md:text-3xl"
               />
-              <p className="mt-1 text-xs text-muted-foreground md:text-sm">
-                先创建文档，再在对应阅读材料页面中粘贴或导入内容并完成解析、生成与校验。
-              </p>
             </div>
           </div>
         </div>
