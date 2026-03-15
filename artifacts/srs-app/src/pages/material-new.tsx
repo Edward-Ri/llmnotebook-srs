@@ -4,12 +4,14 @@ import { ArrowLeft, BookOpen, Wand2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListDocumentsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 export default function NewMaterialNotebook() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user, loading, refresh } = useAuth();
 
   const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -31,6 +33,9 @@ export default function NewMaterialNotebook() {
     const normalizedTitle = title.trim() || "未命名阅读材料";
     setIsCreating(true);
     try {
+      if (loading || !user) {
+        await refresh();
+      }
       const createRes = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
