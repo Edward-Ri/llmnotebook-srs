@@ -2,15 +2,17 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGetDueCards, useLogReview } from "@workspace/api-client-react";
 import type { Card, DueCardsResponse } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { RefreshCw, BookOpen, Clock, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card as UICard } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { withTimezoneHeaders } from "@/lib/timezone";
+import { authedFetch } from "@/lib/authed-fetch";
 
 export default function Review() {
+  const [, setLocation] = useLocation();
   const search = typeof window !== "undefined" ? window.location.search : "";
   const searchParams = new URLSearchParams(search);
   const deckIdParam = searchParams.get("deckId");
@@ -22,10 +24,7 @@ export default function Review() {
     queryKey: ["/api/decks", deckId],
     enabled: !!deckId,
     queryFn: async ({ signal }) => {
-      const res = await fetch(`/api/decks/${deckId}`, {
-        signal,
-        headers: withTimezoneHeaders(),
-      });
+      const res = await authedFetch(`/api/decks/${deckId}`, { signal });
       if (!res.ok) {
         throw new Error("无法加载卡片组信息");
       }
@@ -119,9 +118,9 @@ export default function Review() {
           size="lg"
           onClick={() => {
             if (deckId) {
-              window.location.href = `/decks/${deckId}`;
+              setLocation(`/decks/${deckId}`);
             } else {
-              window.location.href = "/";
+              setLocation("/");
             }
           }}
           className="px-8 shadow-md"

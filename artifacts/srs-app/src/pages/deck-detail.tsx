@@ -4,7 +4,7 @@ import { ArrowLeft, Layers, Play, Clock, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { withTimezoneHeaders } from "@/lib/timezone";
+import { authedFetch } from "@/lib/authed-fetch";
 
 type DeckCard = {
   id: string;
@@ -36,9 +36,7 @@ function useDeckDetail(id: string | undefined) {
     queryKey: ["deck-detail", id],
     enabled: !!id,
     queryFn: async () => {
-      const res = await fetch(`/api/decks/${id}`, {
-        headers: withTimezoneHeaders(),
-      });
+      const res = await authedFetch(`/api/decks/${id}`);
       if (!res.ok) {
         throw new Error("无法加载卡片组详情");
       }

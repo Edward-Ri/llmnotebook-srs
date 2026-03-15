@@ -6,6 +6,7 @@ import { getListDocumentsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { authedFetch } from "@/lib/authed-fetch";
 
 export default function NewMaterialNotebook() {
   const [, setLocation] = useLocation();
@@ -36,7 +37,7 @@ export default function NewMaterialNotebook() {
       if (loading || !user) {
         await refresh();
       }
-      const createRes = await fetch("/api/documents", {
+      const createRes = await authedFetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: normalizedTitle }),

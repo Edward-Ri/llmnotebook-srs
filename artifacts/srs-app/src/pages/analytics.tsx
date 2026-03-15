@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { StatCard } from "@/components/ui/stat-card";
 import { Brain, Calendar, Target, Zap } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { withTimezoneHeaders } from "@/lib/timezone";
+import { authedFetch } from "@/lib/authed-fetch";
 
 type AnalyticsSummaryResponse = {
   retentionRate?: number;
@@ -16,14 +16,11 @@ type AnalyticsSummaryResponse = {
 };
 
 export default function Analytics() {
-  const { data: heatmap, isLoading: heatLoading } = useGetHeatmapData();
-  const { data: summary, isLoading: sumLoading } = useQuery<AnalyticsSummaryResponse>({
+  const { data: heatmap, isLoading: heatLoading, error: heatError } = useGetHeatmapData();
+  const { data: summary, isLoading: sumLoading, error: summaryError } = useQuery<AnalyticsSummaryResponse>({
     queryKey: ["/api/analytics/summary"],
     queryFn: async ({ signal }) => {
-      const res = await fetch("/api/analytics/summary", {
-        signal,
-        headers: withTimezoneHeaders(),
-      });
+      const res = await authedFetch("/api/analytics/summary", { signal });
       if (!res.ok) {
         throw new Error("无法加载统计摘要");
       }
@@ -39,6 +36,21 @@ export default function Analytics() {
       </div>
       <div className="h-64 bg-muted rounded-xl"></div>
     </div>;
+  }
+
+  if (heatError || summaryError) {
+    const message = summaryError instanceof Error
+      ? summaryError.message
+      : heatError instanceof Error
+        ? heatError.message
+        : "请稍后重试";
+    return (
+      <div className="h-full max-w-6xl mx-auto p-6 md:p-12 overflow-y-auto">
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          学习分析数据加载失败：{message}
+        </div>
+      </div>
+    );
   }
 
   // Ensure we have some data for chart even if empty

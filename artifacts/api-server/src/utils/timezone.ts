@@ -30,10 +30,13 @@ export function resolveTzOffsetMinutes(req: Request): number {
 
 export function getLocalDayBounds(reference: Date, tzOffsetMinutes: number) {
   const offsetMs = tzOffsetMinutes * 60 * 1000;
-  const localReference = new Date(reference.getTime() - offsetMs);
-  localReference.setHours(0, 0, 0, 0);
-
-  const dayStartUtc = new Date(localReference.getTime() + offsetMs);
+  const shifted = new Date(reference.getTime() - offsetMs);
+  const shiftedMidnightUtcMs = Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate(),
+  );
+  const dayStartUtc = new Date(shiftedMidnightUtcMs + offsetMs);
   const nextDayStartUtc = new Date(dayStartUtc.getTime() + 24 * 60 * 60 * 1000);
 
   return { dayStartUtc, nextDayStartUtc };

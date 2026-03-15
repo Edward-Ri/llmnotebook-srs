@@ -43,12 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (res.status === 401) {
-        const token = sessionStorage.getItem("guest_token");
-        if (!token) {
-          await createGuest();
-        } else {
-          setUser(null);
-        }
+        sessionStorage.removeItem("guest_token");
+        await createGuest();
         return;
       }
       setUser(null);
@@ -60,30 +56,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [createGuest]);
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
-
-  useEffect(() => {
-    const sendLogout = () => {
-      try {
-        const token = sessionStorage.getItem("guest_token");
-        const headers: Record<string, string> = {};
-        if (token) headers.authorization = `Bearer ${token}`;
-        fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-          headers,
-          keepalive: true,
-        }).catch(() => {});
-      } catch {
-        // ignore unload errors
-      }
-    };
-
-    window.addEventListener("beforeunload", sendLogout);
-
-    return () => {
-      window.removeEventListener("beforeunload", sendLogout);
-    };
-  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -130,7 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    const token = sessionStorage.getItem("guest_token");
+    const headers: Record<string, string> = {};
+    if (token) headers.authorization = `Bearer ${token}`;
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers,
+    });
     sessionStorage.removeItem("guest_token");
     setUser(null);
     setLoading(true);

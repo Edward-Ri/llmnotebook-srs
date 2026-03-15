@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DocumentCardValidation } from "@/components/document-card-validation";
 import { useToast } from "@/hooks/use-toast";
+import { authedFetch } from "@/lib/authed-fetch";
 
 export default function MaterialDetail() {
   const [, params] = useRoute<{ id: string }>("/materials/:id");
@@ -98,7 +99,7 @@ export default function MaterialDetail() {
 
     setIsAnalyzing(true);
     try {
-      const analyzeRes = await fetch("/api/documents/analyze", {
+      const analyzeRes = await authedFetch("/api/documents/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId: id, text: draftContent }),
