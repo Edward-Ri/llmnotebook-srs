@@ -217,6 +217,15 @@ export interface BatchAssignDeckResponse {
   updated: number;
 }
 
+export interface DeleteCardsBatchRequest {
+  deckId: string;
+  ids: string[];
+}
+
+export interface DeleteCardsBatchResponse {
+  deleted: number;
+}
+
 export interface DueCardsResponse {
   cards: Card[];
   total: number;

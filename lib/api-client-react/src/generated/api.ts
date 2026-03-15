@@ -28,6 +28,8 @@ import type {
   DeckDetail,
   DeckListResponse,
   DeckSummary,
+  DeleteCardsBatchRequest,
+  DeleteCardsBatchResponse,
   DocumentListResponse,
   DueCardsResponse,
   GenerateCardsRequest,
@@ -1225,6 +1227,92 @@ export const useBatchAssignDeck = <
   TContext
 > => {
   return useMutation(getBatchAssignDeckMutationOptions(options));
+};
+
+/**
+ * @summary 批量删除正式卡片
+ */
+export const getDeleteCardsBatchUrl = () => {
+  return `/api/cards/batch`;
+};
+
+export const deleteCardsBatch = async (
+  deleteCardsBatchRequest: DeleteCardsBatchRequest,
+  options?: RequestInit,
+): Promise<DeleteCardsBatchResponse> => {
+  return customFetch<DeleteCardsBatchResponse>(getDeleteCardsBatchUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(deleteCardsBatchRequest),
+  });
+};
+
+export const getDeleteCardsBatchMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCardsBatch>>,
+    TError,
+    { data: BodyType<DeleteCardsBatchRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCardsBatch>>,
+  TError,
+  { data: BodyType<DeleteCardsBatchRequest> },
+  TContext
+> => {
+  const mutationKey = ["deleteCardsBatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCardsBatch>>,
+    { data: BodyType<DeleteCardsBatchRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return deleteCardsBatch(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCardsBatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteCardsBatch>>
+>;
+export type DeleteCardsBatchMutationBody = BodyType<DeleteCardsBatchRequest>;
+export type DeleteCardsBatchMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 批量删除正式卡片
+ */
+export const useDeleteCardsBatch = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCardsBatch>>,
+    TError,
+    { data: BodyType<DeleteCardsBatchRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCardsBatch>>,
+  TError,
+  { data: BodyType<DeleteCardsBatchRequest> },
+  TContext
+> => {
+  return useMutation(getDeleteCardsBatchMutationOptions(options));
 };
 
 /**

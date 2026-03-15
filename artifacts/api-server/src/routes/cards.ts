@@ -54,6 +54,11 @@ const BatchAssignDeckRequest = z.object({
   })).min(1),
 });
 
+const BatchDeleteCardsRequest = z.object({
+  deckId: z.string().uuid(),
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 type LlmCard = { front: string; back: string };
 
 function parseCardsJson(raw: string): LlmCard[] {
@@ -505,6 +510,35 @@ router.patch("/batch-assign-deck", requireAuth, async (req, res) => {
     }
     console.error("Batch assign deck failed", error);
     return res.status(500).json({ error: "批量分配卡片组失败" });
+  }
+});
+
+router.delete("/batch", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const body = BatchDeleteCardsRequest.parse(req.body);
+
+    const [deck] = await db
+      .select({ id: decksTable.id })
+      .from(decksTable)
+      .where(and(eq(decksTable.id, body.deckId), eq(decksTable.userId, userId)))
+      .limit(1);
+
+    if (!deck) {
+      return res.status(404).json({ error: "卡片组不存在" });
+    }
+
+    const result = await db
+      .delete(flashcardsTable)
+      .where(and(eq(flashcardsTable.deckId, body.deckId), inArray(flashcardsTable.id, body.ids)));
+
+    return res.json({ deleted: result.rowCount ?? 0 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(error.issues);
+    }
+    console.error("Batch delete cards failed", error);
+    return res.status(500).json({ error: "批量删除卡片失败" });
   }
 });
 

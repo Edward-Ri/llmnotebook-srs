@@ -25,6 +25,8 @@ export * from "./deckCard";
 export * from "./deckDetail";
 export * from "./deckListResponse";
 export * from "./deckSummary";
+export * from "./deleteCardsBatchRequest";
+export * from "./deleteCardsBatchResponse";
 export * from "./document";
 export * from "./documentListResponse";
 export * from "./dueCardsResponse";

@@ -252,6 +252,18 @@ export const BatchAssignDeckResponse = zod.object({
 });
 
 /**
+ * @summary 批量删除正式卡片
+ */
+export const DeleteCardsBatchBody = zod.object({
+  deckId: zod.string().uuid(),
+  ids: zod.array(zod.string().uuid()),
+});
+
+export const DeleteCardsBatchResponse = zod.object({
+  deleted: zod.number(),
+});
+
+/**
  * @summary 获取今日到期复习卡片
  */
 export const GetDueCardsQueryParams = zod.object({
