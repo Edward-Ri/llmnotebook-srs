@@ -171,107 +171,119 @@ export default function Review() {
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50, transition: { duration: 0.2 } }}
-              className="flex-1 w-full relative transform-style-3d transition-transform duration-500"
-              style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+              className="flex-1 w-full relative"
             >
-              {/* FRONT OF CARD */}
-              <UICard className="absolute inset-0 backface-hidden bg-card border-border/50 shadow-2xl flex flex-col cursor-pointer overflow-hidden group">
-                <div className="flex-1 p-8 md:p-16 flex flex-col items-center justify-center text-center relative">
-                  <div className="absolute top-6 left-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Brain className="w-4 h-4" /> 问题
-                  </div>
-                  {currentCard.keyword && (
-                    <div className="absolute top-6 right-6">
-                      <span className="text-xs bg-secondary text-secondary-foreground px-3 py-1 rounded-full font-medium">
-                        {currentCard.keyword}
-                      </span>
-                    </div>
-                  )}
-                  <h2 className="text-3xl md:text-5xl font-bold leading-tight text-foreground">
-                    {currentCard.frontContent}
-                  </h2>
-                </div>
-                <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-border/50 text-center">
-                  <Button 
-                    size="lg" 
-                    className="w-full max-w-sm mx-auto shadow-md hover:shadow-lg transition-all"
-                    onClick={() => setIsFlipped(true)}
-                  >
-                    显示答案
-                  </Button>
-                </div>
-              </UICard>
-
-              {/* BACK OF CARD */}
-              <UICard className="absolute inset-0 backface-hidden rotate-y-180 bg-card border-primary/20 shadow-2xl flex flex-col overflow-hidden">
-                <div className="flex-1 flex flex-col overflow-y-auto">
-                  {/* 1. 问题区域 */}
-                  <div className="px-8 md:px-12 pt-8 pb-4">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
+              <div
+                className="absolute inset-0 transform-style-3d transition-transform duration-500"
+                style={{ transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
+              >
+                {/* FRONT OF CARD */}
+                <UICard
+                  className={`absolute inset-0 backface-hidden bg-card border-border/50 shadow-2xl flex flex-col overflow-hidden group ${
+                    isFlipped ? "pointer-events-none z-0" : "pointer-events-auto z-10"
+                  }`}
+                >
+                  <div className="flex-1 p-8 md:p-16 flex flex-col items-center justify-center text-center relative">
+                    <div className="absolute top-6 left-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                       <Brain className="w-4 h-4" /> 问题
                     </div>
-                    <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+                    {currentCard.keyword && (
+                      <div className="absolute top-6 right-6">
+                        <span className="text-xs bg-secondary text-secondary-foreground px-3 py-1 rounded-full font-medium">
+                          {currentCard.keyword}
+                        </span>
+                      </div>
+                    )}
+                    <h2 className="text-3xl md:text-5xl font-bold leading-tight text-foreground">
                       {currentCard.frontContent}
-                    </p>
+                    </h2>
                   </div>
+                  <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-border/50 text-center">
+                    <Button
+                      size="lg"
+                      className="w-full max-w-sm mx-auto shadow-md hover:shadow-lg transition-all"
+                      onClick={() => setIsFlipped(true)}
+                    >
+                      显示答案
+                    </Button>
+                  </div>
+                </UICard>
 
-                  {/* 分隔线 */}
-                  <div className="mx-8 md:mx-12 border-t-2 border-primary/20 my-2" />
-
-                  {/* 2. 答案区域 */}
-                  <div className="px-8 md:px-12 py-4 flex-1">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-2 mb-3">
-                      <CheckCircle2 className="w-4 h-4" /> 答案
+                {/* BACK OF CARD */}
+                <UICard
+                  className={`absolute inset-0 backface-hidden rotate-y-180 bg-card border-primary/20 shadow-2xl flex flex-col overflow-hidden ${
+                    isFlipped ? "pointer-events-auto z-10" : "pointer-events-none z-0"
+                  }`}
+                >
+                  <div className="flex-1 flex flex-col overflow-y-auto">
+                    {/* 1. 问题区域 */}
+                    <div className="px-8 md:px-12 pt-8 pb-4">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
+                        <Brain className="w-4 h-4" /> 问题
+                      </div>
+                      <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+                        {currentCard.frontContent}
+                      </p>
                     </div>
-                    <p className="text-xl md:text-2xl font-semibold leading-relaxed text-foreground whitespace-pre-wrap">
-                      {currentCard.backContent}
-                    </p>
-                  </div>
-                </div>
 
-                {/* 3. 掌握程度评级区域 */}
-                <div className="p-5 bg-muted/40 border-t border-border/50">
-                  <div className="max-w-2xl mx-auto">
-                    <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                      对该概念的掌握程度
-                    </p>
-                    <div className="grid grid-cols-4 gap-2 md:gap-3">
-                      <GradeButton
-                        grade={0}
-                        label="重来 Again"
-                        sub="需要重学"
-                        color="destructive"
-                        onClick={() => handleGrade(0)}
-                        disabled={logReviewMutation.isPending}
-                      />
-                      <GradeButton
-                        grade={3}
-                        label="困难 Hard"
-                        sub="勉强回想"
-                        color="warning"
-                        onClick={() => handleGrade(3)}
-                        disabled={logReviewMutation.isPending}
-                      />
-                      <GradeButton
-                        grade={4}
-                        label="良好 Good"
-                        sub="回想顺畅"
-                        color="blue-500"
-                        onClick={() => handleGrade(4)}
-                        disabled={logReviewMutation.isPending}
-                      />
-                      <GradeButton
-                        grade={5}
-                        label="简单 Easy"
-                        sub="非常轻松"
-                        color="success"
-                        onClick={() => handleGrade(5)}
-                        disabled={logReviewMutation.isPending}
-                      />
+                    {/* 分隔线 */}
+                    <div className="mx-8 md:mx-12 border-t-2 border-primary/20 my-2" />
+
+                    {/* 2. 答案区域 */}
+                    <div className="px-8 md:px-12 py-4 flex-1">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-2 mb-3">
+                        <CheckCircle2 className="w-4 h-4" /> 答案
+                      </div>
+                      <p className="text-xl md:text-2xl font-semibold leading-relaxed text-foreground whitespace-pre-wrap">
+                        {currentCard.backContent}
+                      </p>
                     </div>
                   </div>
-                </div>
-              </UICard>
+
+                  {/* 3. 掌握程度评级区域 */}
+                  <div className="p-5 bg-muted/40 border-t border-border/50">
+                    <div className="max-w-2xl mx-auto">
+                      <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                        对该概念的掌握程度
+                      </p>
+                      <div className="grid grid-cols-4 gap-2 md:gap-3">
+                        <GradeButton
+                          grade={0}
+                          label="重来 Again"
+                          sub="需要重学"
+                          color="destructive"
+                          onClick={() => handleGrade(0)}
+                          disabled={logReviewMutation.isPending}
+                        />
+                        <GradeButton
+                          grade={3}
+                          label="困难 Hard"
+                          sub="勉强回想"
+                          color="warning"
+                          onClick={() => handleGrade(3)}
+                          disabled={logReviewMutation.isPending}
+                        />
+                        <GradeButton
+                          grade={4}
+                          label="良好 Good"
+                          sub="回想顺畅"
+                          color="blue-500"
+                          onClick={() => handleGrade(4)}
+                          disabled={logReviewMutation.isPending}
+                        />
+                        <GradeButton
+                          grade={5}
+                          label="简单 Easy"
+                          sub="非常轻松"
+                          color="success"
+                          onClick={() => handleGrade(5)}
+                          disabled={logReviewMutation.isPending}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </UICard>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
