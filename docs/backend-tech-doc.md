@@ -29,13 +29,25 @@
 - 请求体：`{ documentId: uuid, text: string }`
 - 前置条件：文档必须已由 `POST /api/documents` 创建，且归属当前用户
 - 主流程：
-  1. `physicalChunk` + `segmentSections` 进行段落与 section 切分
-  2. 按 section 调用 DeepSeek 提取关键词（过滤 `score < 3`）
-  3. 写入 `text_blocks`、`sections`、`keywords`
-  4. 组装并返回 `toc` 与关键词列表（UUID）
+  1. `physicalChunk` 进行段落切分
+  2. 目录混合生成：
+     - 优先使用原文层级规则（Markdown 标题、数字编号、中文章节）
+     - 若无可用层级，调用 DeepSeek 先生成两级目录树
+     - 若 LLM 目录生成失败，回退固定分段目录
+  3. 按目录叶子 section 调用 DeepSeek 提取关键词（过滤 `score < 3`）
+  4. 关键词结果在入库前执行去重、停用词过滤、长度过滤，并限制每 section 最多 8 个
+  5. 写入 `text_blocks`、`sections`、`keywords`
+  6. 组装并返回 `toc` 与关键词列表（UUID），附带 `tocSource`（`rule`/`llm`/`fallback`）
 - 错误约定：
   - LLM 异常：`502 { error: "LLM_ERROR", message }`
   - 其他异常：`500 { error: "ANALYZE_ERROR", message }`
+
+#### 4.1 目录树读取（`GET /api/documents/:documentId/outline`）
+
+- 文件：`src/routes/documents.ts`
+- 能力：返回文档的树形目录（含每个 section 的关键词）
+- 返回结构：`{ documentId, toc }`
+- 用途：前端在阅读材料详情页按目录节点渲染关键词，而非平铺关键词列表
 
 ### 5. 卡片生成与校验流程
 
@@ -117,3 +129,5 @@
 - 鉴权链路补充访客模式与 Bearer Token 回退支持。
 - 复习队列改为 `New + Due` 并补充 `newCount / dueCount / todayReviewed`。
 - 统计与卡片组看板改为按本地时区计算，修复跨日边界导致的“今日数据缺失”问题。
+- 文档解析改为“规则优先 + LLM 补全 + 失败回退”的混合目录生成模式，目录与关键词结构更稳定。
+- 新增 `GET /api/documents/:documentId/outline` 接口，支持前端按章节目录展示关键词并联动原文定位。

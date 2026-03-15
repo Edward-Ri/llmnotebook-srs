@@ -56,8 +56,9 @@
 - 文件：`src/pages/material-detail.tsx`
 - 能力：
   - 在页面内粘贴/上传文本并调用 `POST /api/documents/analyze` 完成解析
-  - 展示原文与关键词列表
-  - 点击关键词本地选择
+  - 调用 `GET /api/documents/:documentId/outline` 拉取目录树（含章节关键词）
+  - 左侧按段落展示原文，右侧按目录章节展示关键词（不再平铺随机标签）
+  - 点击目录节点可滚动定位到原文段落，点击关键词本地选择
   - 提交时先 `PUT /api/documents/:id/keywords`，再 `POST /api/cards/generate`
   - 生成成功后在当前页面内进入候选卡片校验区（不再跳转独立 `/validate` 路由）
 
@@ -100,6 +101,7 @@
 
 - 关键词、文档、卡片、卡片组 ID 全部为 **UUID 字符串**
 - `keywordId` 可为 `null`
+- 关键词对象可能包含 `sectionId`（用于目录分组渲染）
 - 生成卡片入口为 `POST /api/cards/generate`（候选卡片）
 
 ### 8. 本地开发与代理
@@ -127,3 +129,5 @@ API_TARGET=http://localhost:<port> pnpm dev
 - 复习页翻转交互修复：分离入场动画与 `rotateY` 翻面动画，避免“显示答案”无响应。
 - 复习完成页改为 SPA 路由跳转，修复复习后会话被误清理导致的数据丢失感知问题。
 - 分析页接入失败态展示，避免接口异常时误显示为“0 统计”。
+- 阅读材料详情页恢复目录树交互：按章节展示关键词并支持目录到原文段落定位。
+- 前端接入 `GET /api/documents/:documentId/outline`，替代单纯平铺关键词展示方式。
