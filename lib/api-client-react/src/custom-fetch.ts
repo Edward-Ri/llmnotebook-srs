@@ -288,6 +288,9 @@ export async function customFetch<T = unknown>(
     const token = sessionStorage.getItem("guest_token");
     if (token) headers.set("authorization", `Bearer ${token}`);
   }
+  if (!headers.has("x-tz-offset-minutes")) {
+    headers.set("x-tz-offset-minutes", String(new Date().getTimezoneOffset()));
+  }
 
   if (
     typeof init.body === "string" &&

@@ -4,6 +4,7 @@ import { ArrowLeft, Layers, Play, Clock, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { withTimezoneHeaders } from "@/lib/timezone";
 
 type DeckCard = {
   id: string;
@@ -25,6 +26,8 @@ type DeckDetailResponse = {
   updatedAt: string;
   totalCards: number;
   dueCards: number;
+  newCards?: number;
+  reviewedToday?: number;
   cards: DeckCard[];
 };
 
@@ -33,7 +36,9 @@ function useDeckDetail(id: string | undefined) {
     queryKey: ["deck-detail", id],
     enabled: !!id,
     queryFn: async () => {
-      const res = await fetch(`/api/decks/${id}`);
+      const res = await fetch(`/api/decks/${id}`, {
+        headers: withTimezoneHeaders(),
+      });
       if (!res.ok) {
         throw new Error("无法加载卡片组详情");
       }
@@ -106,8 +111,16 @@ export default function DeckDetail() {
                   <span className="text-lg font-semibold text-foreground">{deck.totalCards}</span>
                 </div>
                 <div className="flex flex-col text-xs text-muted-foreground">
+                  <span>新卡</span>
+                  <span className="text-lg font-semibold text-foreground">{deck.newCards ?? 0}</span>
+                </div>
+                <div className="flex flex-col text-xs text-muted-foreground">
                   <span>待复习</span>
                   <span className="text-lg font-semibold text-primary">{deck.dueCards}</span>
+                </div>
+                <div className="flex flex-col text-xs text-muted-foreground">
+                  <span>今日已背诵</span>
+                  <span className="text-lg font-semibold text-foreground">{deck.reviewedToday ?? 0}</span>
                 </div>
               </div>
               <div className="text-[11px] text-muted-foreground flex items-center gap-2">

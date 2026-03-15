@@ -48,6 +48,8 @@ type DeckNode = {
   children?: DeckNode[];
   totalCards?: number;
   dueCards?: number;
+  newCards?: number;
+  reviewedToday?: number;
   updatedAt?: string;
 };
 
@@ -126,8 +128,10 @@ export default function Dashboard() {
     }
 
     const items = flattened.map((deck) => {
-      const totalCards =
-        typeof deck.totalCards === "number" ? `${deck.totalCards} 张卡片` : "卡片组";
+      const newCards = typeof deck.newCards === "number" ? deck.newCards : 0;
+      const dueCards = typeof deck.dueCards === "number" ? deck.dueCards : 0;
+      const reviewedToday =
+        typeof deck.reviewedToday === "number" ? deck.reviewedToday : 0;
       const sortAt = deck.updatedAt ? Date.parse(deck.updatedAt) : undefined;
       const updatedAt = deck.updatedAt
         ? new Date(deck.updatedAt).toLocaleString()
@@ -136,10 +140,10 @@ export default function Dashboard() {
         id: deck.id,
         type: "deck" as const,
         title: deck.name,
-        subtitle: `卡片组 · ${totalCards}`,
+        subtitle: `卡片组 · New ${newCards} · Due ${dueCards} · 今日已背诵 ${reviewedToday}`,
         updatedAt,
         sortAt,
-        href: `/decks/${deck.id}`,
+        href: `/review?deckId=${deck.id}`,
       };
     });
 

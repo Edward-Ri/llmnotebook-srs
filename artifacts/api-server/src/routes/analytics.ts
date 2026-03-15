@@ -1,35 +1,50 @@
 import { Router, type IRouter, type Request } from "express";
 import { db } from "@workspace/db";
 import { decksTable, flashcardsTable, reviewLogsTable } from "@workspace/db/schema";
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, gt, lt, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { getLocalDayBounds, resolveTzOffsetMinutes, toLocalDateKey } from "../utils/timezone";
 
 const router: IRouter = Router();
 
 const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const previousDateKey = (dateKey: string) => {
+  const d = new Date(`${dateKey}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
 
 router.get("/heatmap", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(start.getDate() - 364);
-    start.setHours(0, 0, 0, 0);
+    const tzOffsetMinutes = resolveTzOffsetMinutes(req);
+    const { dayStartUtc, nextDayStartUtc } = getLocalDayBounds(new Date(), tzOffsetMinutes);
+    const start = new Date(dayStartUtc.getTime() - 364 * DAY_MS);
 
     const rows = await db
       .select({
-        day: sql<string>`date(${reviewLogsTable.createdAt})`,
-        count: sql<number>`count(*)`,
+        createdAt: reviewLogsTable.createdAt,
       })
       .from(reviewLogsTable)
-      .where(and(eq(reviewLogsTable.userId, userId), gte(reviewLogsTable.createdAt, start)))
-      .groupBy(sql`date(${reviewLogsTable.createdAt})`)
-      .orderBy(sql`date(${reviewLogsTable.createdAt})`);
+      .where(
+        and(
+          eq(reviewLogsTable.userId, userId),
+          gte(reviewLogsTable.createdAt, start),
+          lt(reviewLogsTable.createdAt, nextDayStartUtc),
+        ),
+      );
 
-    const data = rows.map((row) => ({
-      date: row.day,
-      count: Number(row.count ?? 0),
-    }));
+    const grouped = new Map<string, number>();
+    rows.forEach((row) => {
+      const key = toLocalDateKey(row.createdAt, tzOffsetMinutes);
+      grouped.set(key, (grouped.get(key) ?? 0) + 1);
+    });
+
+    const data = Array.from(grouped.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, value]) => ({ date, count: value }));
 
     return res.json({ data });
   } catch (error) {
@@ -41,8 +56,10 @@ router.get("/heatmap", requireAuth, async (req, res) => {
 router.get("/summary", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
+    const tzOffsetMinutes = resolveTzOffsetMinutes(req);
+    const { dayStartUtc, nextDayStartUtc } = getLocalDayBounds(new Date(), tzOffsetMinutes);
 
-    const [{ totalCards }] = await db
+    const [{ totalCards = 0 }] = await db
       .select({
         totalCards: count(flashcardsTable.id),
       })
@@ -50,7 +67,7 @@ router.get("/summary", requireAuth, async (req, res) => {
       .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
       .where(eq(decksTable.userId, userId));
 
-    const [{ totalReviews, avgGrade, successReviews }] = await db
+    const [{ totalReviews = 0, avgGrade, successReviews = 0 }] = await db
       .select({
         totalReviews: count(reviewLogsTable.id),
         avgGrade: sql<number>`avg(${reviewLogsTable.grade})`,
@@ -59,28 +76,48 @@ router.get("/summary", requireAuth, async (req, res) => {
       .from(reviewLogsTable)
       .where(eq(reviewLogsTable.userId, userId));
 
+    const [{ todayReviews = 0 }] = await db
+      .select({
+        todayReviews: count(reviewLogsTable.id),
+      })
+      .from(reviewLogsTable)
+      .where(
+        and(
+          eq(reviewLogsTable.userId, userId),
+          gte(reviewLogsTable.createdAt, dayStartUtc),
+          lt(reviewLogsTable.createdAt, nextDayStartUtc),
+        ),
+      );
+
+    const [{ dueToday = 0 }] = await db
+      .select({
+        dueToday: count(flashcardsTable.id),
+      })
+      .from(flashcardsTable)
+      .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
+      .where(
+        and(
+          eq(decksTable.userId, userId),
+          gt(flashcardsTable.interval, 0),
+          lt(flashcardsTable.nextReviewDate, nextDayStartUtc),
+        ),
+      );
+
     const dayRows = await db
       .select({
-        day: sql<string>`date(${reviewLogsTable.createdAt})`,
+        createdAt: reviewLogsTable.createdAt,
       })
       .from(reviewLogsTable)
       .where(eq(reviewLogsTable.userId, userId))
-      .groupBy(sql`date(${reviewLogsTable.createdAt})`)
-      .orderBy(desc(sql`date(${reviewLogsTable.createdAt})`));
+      .orderBy(reviewLogsTable.createdAt);
 
-    const daySet = new Set(dayRows.map((row) => row.day));
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
+    const daySet = new Set(dayRows.map((row) => toLocalDateKey(row.createdAt, tzOffsetMinutes)));
+    const todayStr = toLocalDateKey(new Date(), tzOffsetMinutes);
     let streak = 0;
-    if (daySet.has(todayStr)) {
-      streak = 1;
-      const cursor = new Date(today);
-      while (true) {
-        cursor.setDate(cursor.getDate() - 1);
-        const dayStr = cursor.toISOString().slice(0, 10);
-        if (!daySet.has(dayStr)) break;
-        streak += 1;
-      }
+    let cursor = todayStr;
+    while (daySet.has(cursor)) {
+      streak += 1;
+      cursor = previousDateKey(cursor);
     }
 
     const totalReviewsNum = Number(totalReviews ?? 0);
@@ -91,10 +128,13 @@ router.get("/summary", requireAuth, async (req, res) => {
       avgGrade === null || avgGrade === undefined ? 0 : Number(avgGrade);
 
     return res.json({
+      totalCards: Number(totalCards ?? 0),
       retentionRate,
       activeCards: Number(totalCards ?? 0),
       totalReviews: totalReviewsNum,
+      todayReviews: Number(todayReviews ?? 0),
       streak,
+      dueToday: Number(dueToday ?? 0),
       averageGrade,
     });
   } catch (error) {

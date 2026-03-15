@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGetDueCards, useLogReview } from "@workspace/api-client-react";
 import type { Card, DueCardsResponse } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,6 +8,7 @@ import { RefreshCw, BookOpen, Clock, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card as UICard } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { withTimezoneHeaders } from "@/lib/timezone";
 
 export default function Review() {
   const search = typeof window !== "undefined" ? window.location.search : "";
@@ -15,25 +16,16 @@ export default function Review() {
   const deckIdParam = searchParams.get("deckId");
   const deckId = deckIdParam ?? undefined;
 
-  const baseDue = useGetDueCards();
-
-  const deckFilteredDue = useQuery<DueCardsResponse, Error>({
-    queryKey: ["/api/reviews/due", { deckId }],
-    enabled: !!deckId,
-    queryFn: async ({ signal }) => {
-      const res = await fetch(`/api/reviews/due?deckId=${deckId}`, { signal });
-      if (!res.ok) {
-        throw new Error("无法加载待复习卡片");
-      }
-      return (await res.json()) as DueCardsResponse;
-    },
-  });
+  const dueQuery = useGetDueCards(deckId ? { deckId } : undefined);
 
   const deckMeta = useQuery<{ id: string; name: string }, Error>({
     queryKey: ["/api/decks", deckId],
     enabled: !!deckId,
     queryFn: async ({ signal }) => {
-      const res = await fetch(`/api/decks/${deckId}`, { signal });
+      const res = await fetch(`/api/decks/${deckId}`, {
+        signal,
+        headers: withTimezoneHeaders(),
+      });
       if (!res.ok) {
         throw new Error("无法加载卡片组信息");
       }
@@ -42,10 +34,11 @@ export default function Review() {
     },
   });
 
-  const data = deckId ? deckFilteredDue.data : baseDue.data;
-  const isLoading = deckId ? deckFilteredDue.isLoading : baseDue.isLoading;
+  const data = dueQuery.data as (DueCardsResponse & { newCount?: number; dueCount?: number }) | undefined;
+  const isLoading = dueQuery.isLoading;
 
   const logReviewMutation = useLogReview();
+  const queryClient = useQueryClient();
 
   const [cards, setCards] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -68,6 +61,15 @@ export default function Review() {
       await logReviewMutation.mutateAsync({
         data: { cardId: currentCard.id, grade }
       });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/reviews/due"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/decks"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/analytics/heatmap"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/analytics/summary"] }),
+        deckId
+          ? queryClient.invalidateQueries({ queryKey: ["deck-detail", deckId] })
+          : Promise.resolve(),
+      ]);
       
       // Move to next card
       setIsFlipped(false);
@@ -146,6 +148,9 @@ export default function Review() {
             {deckId
               ? `正在复习：${deckMeta.data?.name ?? `卡片组 #${deckId}`}`
               : "当前模式：全部待复习卡片"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            今日队列：New {data?.newCount ?? 0} · Due {data?.dueCount ?? 0} · 已背诵 {data?.todayReviewed ?? 0}
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -233,34 +238,34 @@ export default function Review() {
                     <div className="grid grid-cols-4 gap-2 md:gap-3">
                       <GradeButton
                         grade={0}
-                        label="完全遗忘"
-                        sub="明天再见"
+                        label="重来 Again"
+                        sub="需要重学"
                         color="destructive"
                         onClick={() => handleGrade(0)}
                         disabled={logReviewMutation.isPending}
                       />
                       <GradeButton
-                        grade={1}
-                        label="困难"
-                        sub="有点印象"
-                        color="warning"
-                        onClick={() => handleGrade(1)}
-                        disabled={logReviewMutation.isPending}
-                      />
-                      <GradeButton
-                        grade={2}
-                        label="一般"
-                        sub="需要思考"
-                        color="blue-500"
-                        onClick={() => handleGrade(2)}
-                        disabled={logReviewMutation.isPending}
-                      />
-                      <GradeButton
                         grade={3}
-                        label="轻松"
-                        sub="脱口而出"
-                        color="success"
+                        label="困难 Hard"
+                        sub="勉强回想"
+                        color="warning"
                         onClick={() => handleGrade(3)}
+                        disabled={logReviewMutation.isPending}
+                      />
+                      <GradeButton
+                        grade={4}
+                        label="良好 Good"
+                        sub="回想顺畅"
+                        color="blue-500"
+                        onClick={() => handleGrade(4)}
+                        disabled={logReviewMutation.isPending}
+                      />
+                      <GradeButton
+                        grade={5}
+                        label="简单 Easy"
+                        sub="非常轻松"
+                        color="success"
+                        onClick={() => handleGrade(5)}
                         disabled={logReviewMutation.isPending}
                       />
                     </div>

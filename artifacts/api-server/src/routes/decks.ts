@@ -1,8 +1,16 @@
 import { Router, type IRouter, type Request } from "express";
 import { db } from "@workspace/db";
-import { decksTable, documentsTable, flashcardsTable, keywordsTable, sectionsTable } from "@workspace/db/schema";
-import { and, asc, count, eq, inArray, max, min } from "drizzle-orm";
+import {
+  decksTable,
+  documentsTable,
+  flashcardsTable,
+  keywordsTable,
+  reviewLogsTable,
+  sectionsTable,
+} from "@workspace/db/schema";
+import { and, asc, count, eq, gte, inArray, lt } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { getLocalDayBounds, resolveTzOffsetMinutes } from "../utils/timezone";
 
 const router: IRouter = Router();
 const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
@@ -53,6 +61,8 @@ router.post("/", requireAuth, async (req, res) => {
       parentId: deck.parentId,
       totalCards: 0,
       dueCards: 0,
+      newCards: 0,
+      reviewedToday: 0,
       createdAt: now,
       updatedAt: now,
     });
@@ -64,6 +74,8 @@ router.post("/", requireAuth, async (req, res) => {
 
 router.get("/", requireAuth, async (req, res) => {
   const userId = getUserId(req);
+  const tzOffsetMinutes = resolveTzOffsetMinutes(req);
+  const { dayStartUtc, nextDayStartUtc } = getLocalDayBounds(new Date(), tzOffsetMinutes);
   const rows = await db
     .select()
     .from(decksTable)
@@ -77,35 +89,71 @@ router.get("/", requireAuth, async (req, res) => {
   const cardStats = await db
     .select({
       deckId: flashcardsTable.deckId,
-      totalCards: count(flashcardsTable.id),
-      firstCreatedAt: min(flashcardsTable.createdAt),
-      lastCreatedAt: max(flashcardsTable.createdAt),
+      interval: flashcardsTable.interval,
+      nextReviewDate: flashcardsTable.nextReviewDate,
+      createdAt: flashcardsTable.createdAt,
     })
     .from(flashcardsTable)
     .where(inArray(flashcardsTable.deckId, deckIds))
-    .groupBy(flashcardsTable.deckId);
+    .orderBy(asc(flashcardsTable.createdAt));
 
   const statsByDeckId = new Map<
     string,
     {
       totalCards: number;
+      dueCards: number;
+      newCards: number;
+      reviewedToday: number;
       createdAt: string;
       updatedAt: string;
     }
   >();
 
   cardStats.forEach((row) => {
-    const createdAt = row.firstCreatedAt
-      ? row.firstCreatedAt.toISOString()
-      : new Date().toISOString();
-    const updatedAt = row.lastCreatedAt
-      ? row.lastCreatedAt.toISOString()
-      : createdAt;
-    statsByDeckId.set(row.deckId, {
-      totalCards: Number(row.totalCards ?? 0),
-      createdAt,
-      updatedAt,
-    });
+    const createdAt = row.createdAt?.toISOString() ?? new Date().toISOString();
+    const prev = statsByDeckId.get(row.deckId);
+    const dueCards =
+      row.interval > 0 && row.nextReviewDate < nextDayStartUtc ? 1 : 0;
+    const newCards = row.interval === 0 ? 1 : 0;
+    if (!prev) {
+      statsByDeckId.set(row.deckId, {
+        totalCards: 1,
+        dueCards,
+        newCards,
+        reviewedToday: 0,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      return;
+    }
+    prev.totalCards += 1;
+    prev.dueCards += dueCards;
+    prev.newCards += newCards;
+    prev.updatedAt = createdAt;
+  });
+
+  const reviewedStats = await db
+    .select({
+      deckId: flashcardsTable.deckId,
+      reviewed: count(reviewLogsTable.id),
+    })
+    .from(reviewLogsTable)
+    .leftJoin(flashcardsTable, eq(reviewLogsTable.cardId, flashcardsTable.id))
+    .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
+    .where(
+      and(
+        eq(decksTable.userId, userId),
+        gte(reviewLogsTable.createdAt, dayStartUtc),
+        lt(reviewLogsTable.createdAt, nextDayStartUtc),
+      ),
+    )
+    .groupBy(flashcardsTable.deckId);
+
+  reviewedStats.forEach((row) => {
+    if (!row.deckId) return;
+    const prev = statsByDeckId.get(row.deckId);
+    if (!prev) return;
+    prev.reviewedToday = Number(row.reviewed ?? 0);
   });
 
   const nodes = new Map<
@@ -117,6 +165,8 @@ router.get("/", requireAuth, async (req, res) => {
       children: any[];
       totalCards: number;
       dueCards: number;
+      newCards: number;
+      reviewedToday: number;
       createdAt: string;
       updatedAt: string;
     }
@@ -128,6 +178,8 @@ router.get("/", requireAuth, async (req, res) => {
     children: any[];
     totalCards: number;
     dueCards: number;
+    newCards: number;
+    reviewedToday: number;
     createdAt: string;
     updatedAt: string;
   }[] = [];
@@ -142,7 +194,9 @@ router.get("/", requireAuth, async (req, res) => {
       parentId: row.parentId ?? null,
       children: [],
       totalCards: stats?.totalCards ?? 0,
-      dueCards: 0,
+      dueCards: stats?.dueCards ?? 0,
+      newCards: stats?.newCards ?? 0,
+      reviewedToday: stats?.reviewedToday ?? 0,
       createdAt,
       updatedAt,
     });
@@ -163,6 +217,8 @@ router.get("/:deckId", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
     const deckId = req.params.deckId;
+    const tzOffsetMinutes = resolveTzOffsetMinutes(req);
+    const { dayStartUtc, nextDayStartUtc } = getLocalDayBounds(new Date(), tzOffsetMinutes);
 
     const [deck] = await db
       .select({ id: decksTable.id, name: decksTable.name })
@@ -180,6 +236,7 @@ router.get("/:deckId", requireAuth, async (req, res) => {
         frontContent: flashcardsTable.frontContent,
         backContent: flashcardsTable.backContent,
         nextReviewDate: flashcardsTable.nextReviewDate,
+        interval: flashcardsTable.interval,
         keywordId: flashcardsTable.sourceKeywordId,
         keyword: keywordsTable.word,
         documentId: documentsTable.id,
@@ -195,8 +252,22 @@ router.get("/:deckId", requireAuth, async (req, res) => {
 
     const totalCards = cardRows.length;
     const dueCards = cardRows.filter(
-      (row) => row.nextReviewDate && row.nextReviewDate <= new Date(),
+      (row) => row.interval > 0 && row.nextReviewDate < nextDayStartUtc,
     ).length;
+    const newCards = cardRows.filter((row) => row.interval === 0).length;
+    const [{ reviewedToday }] = await db
+      .select({ reviewedToday: count(reviewLogsTable.id) })
+      .from(reviewLogsTable)
+      .leftJoin(flashcardsTable, eq(reviewLogsTable.cardId, flashcardsTable.id))
+      .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
+      .where(
+        and(
+          eq(decksTable.userId, userId),
+          eq(flashcardsTable.deckId, deckId),
+          gte(reviewLogsTable.createdAt, dayStartUtc),
+          lt(reviewLogsTable.createdAt, nextDayStartUtc),
+        ),
+      );
     const createdAt = cardRows[0]?.createdAt?.toISOString() ?? new Date().toISOString();
     const updatedAt = cardRows[cardRows.length - 1]?.createdAt?.toISOString() ?? createdAt;
 
@@ -207,6 +278,8 @@ router.get("/:deckId", requireAuth, async (req, res) => {
       updatedAt,
       totalCards,
       dueCards,
+      newCards,
+      reviewedToday: Number(reviewedToday ?? 0),
       cards: cardRows.map((row) => ({
         id: row.id,
         frontContent: row.frontContent,

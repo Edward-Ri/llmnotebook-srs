@@ -4,19 +4,32 @@ import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { StatCard } from "@/components/ui/stat-card";
 import { Brain, Calendar, Target, Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { withTimezoneHeaders } from "@/lib/timezone";
+
+type AnalyticsSummaryResponse = {
+  retentionRate?: number;
+  activeCards?: number;
+  totalReviews?: number;
+  streak?: number;
+  averageGrade?: number;
+};
 
 export default function Analytics() {
   const { data: heatmap, isLoading: heatLoading } = useGetHeatmapData();
-  const summary = undefined as
-    | {
-        retentionRate?: number;
-        activeCards?: number;
-        totalReviews?: number;
-        streak?: number;
-        averageGrade?: number;
+  const { data: summary, isLoading: sumLoading } = useQuery<AnalyticsSummaryResponse>({
+    queryKey: ["/api/analytics/summary"],
+    queryFn: async ({ signal }) => {
+      const res = await fetch("/api/analytics/summary", {
+        signal,
+        headers: withTimezoneHeaders(),
+      });
+      if (!res.ok) {
+        throw new Error("无法加载统计摘要");
       }
-    | undefined;
-  const sumLoading = false;
+      return (await res.json()) as AnalyticsSummaryResponse;
+    },
+  });
 
   if (sumLoading || heatLoading) {
     return <div className="p-12 animate-pulse flex flex-col gap-8">

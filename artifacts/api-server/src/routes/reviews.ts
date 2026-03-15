@@ -1,19 +1,28 @@
 import { Router, type IRouter, type Request } from "express";
 import { db } from "@workspace/db";
 import { decksTable, flashcardsTable, keywordsTable, reviewLogsTable } from "@workspace/db/schema";
-import { and, asc, count, eq, gte, lte } from "drizzle-orm";
+import { and, asc, count, eq, gte, gt, lt, or } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { z } from "zod";
 import { calculateSM2 } from "../utils/sm2";
+import { getLocalDayBounds, resolveTzOffsetMinutes } from "../utils/timezone";
 
 const router: IRouter = Router();
 
 const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
+const shuffleInPlace = <T>(list: T[]) => {
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    const randomIndex = Math.floor(Math.random() * (i + 1));
+    [list[i], list[randomIndex]] = [list[randomIndex], list[i]];
+  }
+};
 
 router.get("/due", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
     const deckId = typeof req.query.deckId === "string" ? req.query.deckId : undefined;
+    const tzOffsetMinutes = resolveTzOffsetMinutes(req);
+    const { dayStartUtc, nextDayStartUtc } = getLocalDayBounds(new Date(), tzOffsetMinutes);
 
     if (deckId) {
       const [deck] = await db
@@ -28,7 +37,13 @@ router.get("/due", requireAuth, async (req, res) => {
 
     const conditions = [
       eq(decksTable.userId, userId),
-      lte(flashcardsTable.nextReviewDate, new Date()),
+      or(
+        eq(flashcardsTable.interval, 0),
+        and(
+          gt(flashcardsTable.interval, 0),
+          lt(flashcardsTable.nextReviewDate, nextDayStartUtc),
+        ),
+      ),
     ];
     if (deckId) conditions.push(eq(flashcardsTable.deckId, deckId));
 
@@ -50,8 +65,6 @@ router.get("/due", requireAuth, async (req, res) => {
       .where(and(...conditions))
       .orderBy(asc(flashcardsTable.nextReviewDate), asc(flashcardsTable.createdAt));
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
     const todayReviewed = await db
       .select({ count: count() })
       .from(reviewLogsTable)
@@ -60,12 +73,18 @@ router.get("/due", requireAuth, async (req, res) => {
       .where(
         and(
           eq(decksTable.userId, userId),
-          gte(reviewLogsTable.createdAt, todayStart),
+          gte(reviewLogsTable.createdAt, dayStartUtc),
+          lt(reviewLogsTable.createdAt, nextDayStartUtc),
           ...(deckId ? [eq(flashcardsTable.deckId, deckId)] : []),
         ),
       );
 
-    const cards = rows.map((row) => ({
+    let newCount = 0;
+    let dueCount = 0;
+    const cards = rows.map((row) => {
+      if ((row.interval ?? 0) === 0) newCount += 1;
+      else dueCount += 1;
+      return {
       id: row.id,
       frontContent: row.frontContent,
       backContent: row.backContent,
@@ -76,11 +95,15 @@ router.get("/due", requireAuth, async (req, res) => {
       sm2Repetition: row.repetition,
       sm2Efactor: row.easeFactor,
       dueDate: row.nextReviewDate?.toISOString(),
-    }));
+      };
+    });
+    shuffleInPlace(cards);
 
     return res.json({
       cards,
       total: cards.length,
+      newCount,
+      dueCount,
       todayReviewed: Number(todayReviewed[0]?.count ?? 0),
     });
   } catch (error) {

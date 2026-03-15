@@ -22,6 +22,7 @@ import Dashboard from "@/pages/dashboard";
 import Analytics from "@/pages/analytics";
 import MaterialDetail from "@/pages/material-detail";
 import DeckDetail from "@/pages/deck-detail";
+import Review from "@/pages/review";
 import NewMaterialNotebook from "@/pages/material-new";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
@@ -169,6 +170,7 @@ function Router() {
       <Route path="/materials/new" component={NewMaterialNotebook} />
       <Route path="/materials/:id" component={MaterialDetail} />
       <Route path="/decks/:id" component={DeckDetail} />
+      <Route path="/review" component={Review} />
       <Route path="/analytics" component={Analytics} />
       <Route component={NotFound} />
     </Switch>
