@@ -18,6 +18,73 @@ import { DocumentCardValidation } from "@/components/document-card-validation";
 import { useToast } from "@/hooks/use-toast";
 import { authedFetch } from "@/lib/authed-fetch";
 
+type OutlineKeyword = {
+  id: string;
+  word: string;
+};
+
+type OutlineNode = {
+  id: string;
+  title: string;
+  startIndex: number;
+  endIndex: number;
+  children: OutlineNode[];
+  keywords: OutlineKeyword[];
+};
+
+type OutlineResponse = {
+  documentId: string;
+  toc: OutlineNode[];
+};
+
+type FlatOutlineNode = {
+  node: OutlineNode;
+  depth: number;
+};
+
+type ParagraphBlock = {
+  index: number;
+  content: string;
+};
+
+function normalizeParagraphs(text: string): ParagraphBlock[] {
+  if (!text) return [];
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n");
+  const blocks: ParagraphBlock[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length < 5) continue;
+    blocks.push({ index: blocks.length, content: trimmed });
+  }
+
+  return blocks;
+}
+
+function flattenOutline(nodes: OutlineNode[], depth = 0): FlatOutlineNode[] {
+  const result: FlatOutlineNode[] = [];
+  for (const node of nodes) {
+    result.push({ node, depth });
+    if (node.children.length > 0) {
+      result.push(...flattenOutline(node.children, depth + 1));
+    }
+  }
+  return result;
+}
+
+function countOutlineKeywords(nodes: OutlineNode[]): number {
+  const ids = new Set<string>();
+  const walk = (items: OutlineNode[]) => {
+    items.forEach((node) => {
+      node.keywords.forEach((kw) => ids.add(String(kw.id)));
+      if (node.children.length > 0) walk(node.children);
+    });
+  };
+  walk(nodes);
+  return ids.size;
+}
+
 export default function MaterialDetail() {
   const [, params] = useRoute<{ id: string }>("/materials/:id");
   const id = params?.id ?? "";
@@ -29,6 +96,8 @@ export default function MaterialDetail() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [draftContent, setDraftContent] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  const [outline, setOutline] = useState<OutlineNode[]>([]);
+  const [isOutlineLoading, setIsOutlineLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const validationRef = useRef<HTMLElement | null>(null);
 
@@ -49,6 +118,12 @@ export default function MaterialDetail() {
 
   const updateKeywordsMutation = useUpdateKeywordSelections();
   const generateCardsMutation = useGenerateCards();
+  const contentBlocks = useMemo(
+    () => normalizeParagraphs(currentDocument?.content ?? ""),
+    [currentDocument?.content],
+  );
+  const flatOutline = useMemo(() => flattenOutline(outline), [outline]);
+  const outlineKeywordCount = useMemo(() => countOutlineKeywords(outline), [outline]);
 
   const isLoading = isDocsLoading || (id !== "" && isKeywordsLoading);
   const hasError = !isLoading && !currentDocument;
@@ -64,6 +139,31 @@ export default function MaterialDetail() {
       .map((kw) => String(kw.id));
     setSelectedIds(selected);
   }, [keywordsData]);
+
+  const fetchOutline = useCallback(async () => {
+    if (!id) {
+      setOutline([]);
+      return;
+    }
+    setIsOutlineLoading(true);
+    try {
+      const res = await authedFetch(`/api/documents/${id}/outline`);
+      if (!res.ok) {
+        setOutline([]);
+        return;
+      }
+      const data = (await res.json()) as OutlineResponse;
+      setOutline(Array.isArray(data?.toc) ? data.toc : []);
+    } catch {
+      setOutline([]);
+    } finally {
+      setIsOutlineLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void fetchOutline();
+  }, [fetchOutline]);
 
   const parseErrorMessage = async (res: Response) => {
     const raw = await res.text();
@@ -88,6 +188,11 @@ export default function MaterialDetail() {
       setDraftContent((ev.target?.result as string) ?? "");
     };
     reader.readAsText(file, "utf-8");
+  }, []);
+
+  const scrollToParagraph = useCallback((paragraphIndex: number) => {
+    const anchor = document.getElementById(`para-${paragraphIndex}`);
+    anchor?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   const handleAnalyze = async () => {
@@ -117,6 +222,7 @@ export default function MaterialDetail() {
           queryKey: getGetPendingCardsQueryKey({ documentId: id }),
         }),
       ]);
+      await fetchOutline();
 
       toast({
         title: "解析成功",
@@ -336,8 +442,18 @@ export default function MaterialDetail() {
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                   <section className="lg:col-span-2 space-y-3">
                     <h2 className="text-sm font-medium text-muted-foreground">原文内容</h2>
-                    <div className="max-h-[480px] min-h-[220px] overflow-y-auto whitespace-pre-wrap rounded-2xl border border-border/60 bg-card/80 p-4 text-sm leading-relaxed text-muted-foreground">
-                      {currentDocument.content}
+                    <div className="max-h-[480px] min-h-[220px] overflow-y-auto rounded-2xl border border-border/60 bg-card/80 p-4 text-sm leading-relaxed text-muted-foreground">
+                      {contentBlocks.length > 0 ? (
+                        <div className="space-y-3">
+                          {contentBlocks.map((block) => (
+                            <p key={block.index} id={`para-${block.index}`} className="scroll-mt-24">
+                              {block.content}
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap">{currentDocument.content}</div>
+                      )}
                     </div>
                   </section>
 
@@ -346,33 +462,76 @@ export default function MaterialDetail() {
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                           <Sparkles className="h-3.5 w-3.5 text-primary" />
-                          <span>关键词与生成卡片</span>
+                          <span>目录与关键词</span>
                         </div>
-                        {keywordsData && (
+                        {(keywordsData || outlineKeywordCount > 0) && (
                           <span className="text-[11px] text-muted-foreground">
-                            共 {keywordsData.keywords.length} 个关键词
+                            共 {Math.max(keywordsData?.keywords.length ?? 0, outlineKeywordCount)} 个关键词
                           </span>
                         )}
                       </div>
 
-                      <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
-                        {keywordsData?.keywords.map((kw) => {
-                          const keywordId = String(kw.id);
-                          return (
+                      <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+                        {isOutlineLoading && (
+                          <div className="space-y-2">
+                            <Skeleton className="h-6 w-full" />
+                            <Skeleton className="h-6 w-[85%]" />
+                            <Skeleton className="h-6 w-[70%]" />
+                          </div>
+                        )}
+
+                        {!isOutlineLoading && flatOutline.length === 0 && (
+                          <div className="rounded-xl border border-dashed border-border/70 bg-background/60 px-3 py-4 text-xs text-muted-foreground">
+                            暂无目录结构，先点击“导入并解析”生成目录与关键词。
+                          </div>
+                        )}
+
+                        {!isOutlineLoading && flatOutline.map(({ node, depth }) => (
+                          <div key={node.id} className="rounded-xl border border-border/60 bg-background/70 p-2.5">
                             <button
-                              key={kw.id}
                               type="button"
-                              onClick={() => toggleKeyword(keywordId)}
+                              className="w-full text-left"
+                              onClick={() => scrollToParagraph(node.startIndex)}
                             >
-                              <Badge
-                                variant={selectedIds.includes(keywordId) ? "default" : "outline"}
-                                className="text-[11px]"
+                              <div
+                                className="space-y-1"
+                                style={{ paddingLeft: `${depth * 12}px` }}
                               >
-                                {kw.word}
-                              </Badge>
+                                <p className="text-xs font-medium text-foreground">{node.title}</p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  段落 {node.startIndex + 1} - {node.endIndex + 1}
+                                </p>
+                              </div>
                             </button>
-                          );
-                        })}
+
+                            <div
+                              className="mt-2 flex flex-wrap gap-1.5"
+                              style={{ paddingLeft: `${depth * 12}px` }}
+                            >
+                              {node.keywords.length === 0 ? (
+                                <span className="text-[11px] text-muted-foreground/80">本节暂无关键词</span>
+                              ) : (
+                                node.keywords.map((kw) => {
+                                  const keywordId = String(kw.id);
+                                  return (
+                                    <button
+                                      key={kw.id}
+                                      type="button"
+                                      onClick={() => toggleKeyword(keywordId)}
+                                    >
+                                      <Badge
+                                        variant={selectedIds.includes(keywordId) ? "default" : "outline"}
+                                        className="text-[11px]"
+                                      >
+                                        {kw.word}
+                                      </Badge>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
 
                       <Button
