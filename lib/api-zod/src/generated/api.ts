@@ -264,6 +264,41 @@ export const DeleteCardsBatchResponse = zod.object({
 });
 
 /**
+ * @summary 更新单张正式卡片
+ */
+export const UpdateCardParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const UpdateCardBody = zod.object({
+  frontContent: zod.string(),
+  backContent: zod.string(),
+});
+
+export const UpdateCardResponse = zod.object({
+  id: zod.string().uuid(),
+  frontContent: zod.string(),
+  backContent: zod.string(),
+  status: zod.string(),
+  keywordId: zod.string().uuid().nullable(),
+  keyword: zod.string().optional(),
+  dueDate: zod.string().optional(),
+  documentId: zod.string().uuid().optional(),
+  documentTitle: zod.string().optional(),
+});
+
+/**
+ * @summary 删除单张正式卡片
+ */
+export const DeleteCardParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const DeleteCardResponse = zod.object({
+  deleted: zod.number(),
+});
+
+/**
  * @summary 获取今日到期复习卡片
  */
 export const GetDueCardsQueryParams = zod.object({

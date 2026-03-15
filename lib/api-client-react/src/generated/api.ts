@@ -25,6 +25,7 @@ import type {
   BatchValidationResponse,
   CardListResponse,
   CreateDeckRequest,
+  DeckCard,
   DeckDetail,
   DeckListResponse,
   DeckSummary,
@@ -44,6 +45,7 @@ import type {
   LogoutResponse,
   RegisterRequest,
   ReviewLogResponse,
+  UpdateCardRequest,
   UpdateDeckRequest,
   UpdateKeywordsRequest,
   ValidateCardsBatchRequest,
@@ -1313,6 +1315,177 @@ export const useDeleteCardsBatch = <
   TContext
 > => {
   return useMutation(getDeleteCardsBatchMutationOptions(options));
+};
+
+/**
+ * @summary 更新单张正式卡片
+ */
+export const getUpdateCardUrl = (id: string) => {
+  return `/api/cards/${id}`;
+};
+
+export const updateCard = async (
+  id: string,
+  updateCardRequest: UpdateCardRequest,
+  options?: RequestInit,
+): Promise<DeckCard> => {
+  return customFetch<DeckCard>(getUpdateCardUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateCardRequest),
+  });
+};
+
+export const getUpdateCardMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCard>>,
+    TError,
+    { id: string; data: BodyType<UpdateCardRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCard>>,
+  TError,
+  { id: string; data: BodyType<UpdateCardRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateCard"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCard>>,
+    { id: string; data: BodyType<UpdateCardRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateCard(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCardMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCard>>
+>;
+export type UpdateCardMutationBody = BodyType<UpdateCardRequest>;
+export type UpdateCardMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 更新单张正式卡片
+ */
+export const useUpdateCard = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCard>>,
+    TError,
+    { id: string; data: BodyType<UpdateCardRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCard>>,
+  TError,
+  { id: string; data: BodyType<UpdateCardRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateCardMutationOptions(options));
+};
+
+/**
+ * @summary 删除单张正式卡片
+ */
+export const getDeleteCardUrl = (id: string) => {
+  return `/api/cards/${id}`;
+};
+
+export const deleteCard = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DeleteCardsBatchResponse> => {
+  return customFetch<DeleteCardsBatchResponse>(getDeleteCardUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCardMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCard>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCard>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteCard"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCard>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteCard(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCardMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteCard>>
+>;
+
+export type DeleteCardMutationError = ErrorType<unknown>;
+
+/**
+ * @summary 删除单张正式卡片
+ */
+export const useDeleteCard = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCard>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCard>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteCardMutationOptions(options));
 };
 
 /**

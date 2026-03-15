@@ -59,6 +59,11 @@ const BatchDeleteCardsRequest = z.object({
   ids: z.array(z.string().uuid()).min(1),
 });
 
+const UpdateCardRequest = z.object({
+  frontContent: z.string().min(1),
+  backContent: z.string().min(1),
+});
+
 type LlmCard = { front: string; back: string };
 
 function parseCardsJson(raw: string): LlmCard[] {
@@ -539,6 +544,73 @@ router.delete("/batch", requireAuth, async (req, res) => {
     }
     console.error("Batch delete cards failed", error);
     return res.status(500).json({ error: "批量删除卡片失败" });
+  }
+});
+
+router.patch("/:cardId", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const cardId = String(req.params.cardId);
+    const body = UpdateCardRequest.parse(req.body);
+    const frontContent = body.frontContent.trim();
+    const backContent = body.backContent.trim();
+
+    if (!frontContent || !backContent) {
+      return res.status(400).json({ error: "卡片正反面内容不能为空" });
+    }
+
+    const [card] = await db
+      .select({ id: flashcardsTable.id })
+      .from(flashcardsTable)
+      .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
+      .where(and(eq(flashcardsTable.id, cardId), eq(decksTable.userId, userId)))
+      .limit(1);
+
+    if (!card) {
+      return res.status(404).json({ error: "卡片不存在" });
+    }
+
+    const [updatedCard] = await db
+      .update(flashcardsTable)
+      .set({ frontContent, backContent })
+      .where(eq(flashcardsTable.id, cardId))
+      .returning({
+        id: flashcardsTable.id,
+        frontContent: flashcardsTable.frontContent,
+        backContent: flashcardsTable.backContent,
+      });
+
+    return res.json(updatedCard);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(error.issues);
+    }
+    console.error("Update card failed", error);
+    return res.status(500).json({ error: "更新卡片失败" });
+  }
+});
+
+router.delete("/:cardId", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const cardId = String(req.params.cardId);
+
+    const [card] = await db
+      .select({ id: flashcardsTable.id })
+      .from(flashcardsTable)
+      .leftJoin(decksTable, eq(flashcardsTable.deckId, decksTable.id))
+      .where(and(eq(flashcardsTable.id, cardId), eq(decksTable.userId, userId)))
+      .limit(1);
+
+    if (!card) {
+      return res.status(404).json({ error: "卡片不存在" });
+    }
+
+    const result = await db.delete(flashcardsTable).where(eq(flashcardsTable.id, cardId));
+    return res.json({ deleted: result.rowCount ?? 0 });
+  } catch (error) {
+    console.error("Delete card failed", error);
+    return res.status(500).json({ error: "删除卡片失败" });
   }
 });
 

@@ -226,6 +226,11 @@ export interface DeleteCardsBatchResponse {
   deleted: number;
 }
 
+export interface UpdateCardRequest {
+  frontContent: string;
+  backContent: string;
+}
+
 export interface DueCardsResponse {
   cards: Card[];
   total: number;

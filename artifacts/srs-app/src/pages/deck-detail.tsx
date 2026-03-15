@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Layers, Play, Clock, BookOpen, Trash2 } from "lucide-react";
+import { ArrowLeft, Layers, Play, Clock, BookOpen, Pencil, Trash2 } from "lucide-react";
 import { getListDecksQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useToast } from "@/hooks/use-toast";
 
@@ -57,6 +66,9 @@ export default function DeckDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+  const [editingCard, setEditingCard] = useState<DeckCard | null>(null);
+  const [editFront, setEditFront] = useState("");
+  const [editBack, setEditBack] = useState("");
   const deleteCardsBatchMutation = useMutation({
     mutationFn: async (payload: { deckId: string; ids: string[] }) => {
       const res = await authedFetch("/api/cards/batch", {
@@ -71,14 +83,56 @@ export default function DeckDetail() {
       return (await res.json()) as { deleted: number };
     },
   });
+  const updateCardMutation = useMutation({
+    mutationFn: async (payload: { cardId: string; frontContent: string; backContent: string }) => {
+      const res = await authedFetch(`/api/cards/${payload.cardId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frontContent: payload.frontContent,
+          backContent: payload.backContent,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "更新卡片失败");
+      }
+      return (await res.json()) as DeckCard;
+    },
+  });
+  const deleteCardMutation = useMutation({
+    mutationFn: async (cardId: string) => {
+      const res = await authedFetch(`/api/cards/${cardId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "删除卡片失败");
+      }
+      return (await res.json()) as { deleted: number };
+    },
+  });
 
   const deck = data;
   const cardIds = useMemo(() => deck?.cards.map((card) => card.id) ?? [], [deck?.cards]);
   const allSelected = cardIds.length > 0 && selectedCardIds.length === cardIds.length;
 
+  const refreshDeckData = async (deckId: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["deck-detail", deckId] }),
+      queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() }),
+    ]);
+  };
+
   useEffect(() => {
     setSelectedCardIds([]);
   }, [id, deck?.updatedAt, deck?.totalCards]);
+
+  useEffect(() => {
+    if (!editingCard) return;
+    setEditFront(editingCard.frontContent);
+    setEditBack(editingCard.backContent);
+  }, [editingCard]);
 
   const toggleCard = (cardId: string, checked: boolean) => {
     setSelectedCardIds((prev) =>
@@ -102,11 +156,69 @@ export default function DeckDetail() {
         ids: selectedCardIds,
       });
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["deck-detail", deck.id] }),
-        queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() }),
-      ]);
+      await refreshDeckData(deck.id);
       setSelectedCardIds([]);
+      toast({
+        title: "已删除卡片",
+        description: `成功删除 ${result.deleted} 张卡片`,
+      });
+    } catch (deleteError: any) {
+      toast({
+        title: "删除失败",
+        description: deleteError?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveCard = async () => {
+    if (!deck || !editingCard) return;
+    const frontContent = editFront.trim();
+    const backContent = editBack.trim();
+
+    if (!frontContent || !backContent) {
+      toast({
+        title: "内容不能为空",
+        description: "卡片正反面都需要填写内容。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await updateCardMutation.mutateAsync({
+        cardId: editingCard.id,
+        frontContent,
+        backContent,
+      });
+      await refreshDeckData(deck.id);
+      setEditingCard(null);
+      toast({
+        title: "已保存卡片修改",
+        description: "卡片内容已更新。",
+      });
+    } catch (saveError: any) {
+      toast({
+        title: "保存失败",
+        description: saveError?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteCard = async (card: DeckCard) => {
+    if (!deck) return;
+    if (!window.confirm("确定删除这张卡片吗？此操作不可撤销。")) {
+      return;
+    }
+
+    try {
+      const result = await deleteCardMutation.mutateAsync(card.id);
+      await refreshDeckData(deck.id);
+      setSelectedCardIds((prev) => prev.filter((id) => id !== card.id));
+      if (editingCard?.id === card.id) {
+        setEditingCard(null);
+      }
       toast({
         title: "已删除卡片",
         description: `成功删除 ${result.deleted} 张卡片`,
@@ -242,11 +354,32 @@ export default function DeckDetail() {
                             <span>卡片 #{card.id}</span>
                           </Badge>
                         </div>
-                        {card.keyword && (
-                          <Badge variant="secondary" className="text-[11px]">
-                            {card.keyword}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {card.keyword && (
+                            <Badge variant="secondary" className="text-[11px]">
+                              {card.keyword}
+                            </Badge>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => setEditingCard(card)}
+                            aria-label="编辑卡片"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => void handleDeleteCard(card)}
+                            disabled={deleteCardMutation.isPending}
+                            aria-label="删除卡片"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                       {card.documentTitle && (
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -270,6 +403,44 @@ export default function DeckDetail() {
           </>
         )}
       </div>
+      <Dialog open={!!editingCard} onOpenChange={(open) => !open && setEditingCard(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑卡片</DialogTitle>
+            <DialogDescription>
+              修改卡片正反面内容后保存，刷新后会保留最新内容。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">正面</label>
+              <Textarea
+                value={editFront}
+                onChange={(event) => setEditFront(event.target.value)}
+                placeholder="输入卡片正面内容"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">背面</label>
+              <Textarea
+                value={editBack}
+                onChange={(event) => setEditBack(event.target.value)}
+                placeholder="输入卡片背面内容"
+                rows={6}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingCard(null)}>
+              取消
+            </Button>
+            <Button onClick={() => void handleSaveCard()} disabled={updateCardMutation.isPending}>
+              {updateCardMutation.isPending ? "保存中..." : "保存修改"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
