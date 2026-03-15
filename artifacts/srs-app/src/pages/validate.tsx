@@ -178,9 +178,24 @@ export default function Validate() {
   const showEmpty = cards.length === 0;
 
   if (showEmpty) {
-    // 没有待校验卡片时，直接返回到总览面板，而不展示单独的“空状态页面”
-    setLocation("/");
-    return null;
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6">
+        <UICard className="max-w-md w-full p-8 text-center bg-card shadow-xl border-border/50">
+          <Layers className="w-16 h-16 text-primary mx-auto mb-6" />
+          <h2 className="text-2xl font-bold mb-2">暂无待校验卡片</h2>
+          <p className="text-muted-foreground mb-8">
+            请先在阅读材料中选择关键词并生成卡片。
+          </p>
+          <Button
+            size="lg"
+            className="w-full bg-primary hover:bg-primary/90 text-white shadow-md shadow-primary/25"
+            onClick={() => setLocation(documentId ? `/materials/${documentId}` : "/")}
+          >
+            返回阅读材料
+          </Button>
+        </UICard>
+      </div>
+    );
   }
 
   if (isDone) {
@@ -211,7 +226,7 @@ export default function Validate() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">双屏卡片校验</h1>
           <p className="text-sm text-muted-foreground">
-            决定保留、修改还是丢弃 AI 生成的卡片，并可一次性分配到指定卡片组。
+            决定保留、修改还是丢弃 AI 生成的卡片，编辑后保存将写入所选卡片组。
           </p>
         </div>
         <div className="flex items-end gap-4">

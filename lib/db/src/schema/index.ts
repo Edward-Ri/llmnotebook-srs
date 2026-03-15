@@ -6,3 +6,4 @@ export * from "./sections";
 export * from "./decks";
 export * from "./flashcards";
 export * from "./cardCandidates";
+export * from "./reviewLogs";

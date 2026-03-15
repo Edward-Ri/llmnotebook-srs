@@ -1,14 +1,25 @@
-import { useMemo } from "react";
-import { useRoute, Link } from "wouter";
-import { useListDocuments, useGetDocumentKeywords } from "@workspace/api-client-react";
+import { useMemo, useEffect, useState } from "react";
+import { useRoute, Link, useLocation } from "wouter";
+import {
+  useListDocuments,
+  useGetDocumentKeywords,
+  useUpdateKeywordSelections,
+  useGenerateCards,
+} from "@workspace/api-client-react";
 import { ArrowLeft, BookOpen, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 export default function MaterialDetail() {
   const [, params] = useRoute<{ id: string }>("/materials/:id");
   const id = params?.id ?? "";
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const {
     data: documentsData,
@@ -25,8 +36,59 @@ export default function MaterialDetail() {
     isLoading: isKeywordsLoading,
   } = useGetDocumentKeywords(id);
 
+  const updateKeywordsMutation = useUpdateKeywordSelections();
+  const generateCardsMutation = useGenerateCards();
+
   const isLoading = isDocsLoading || (id !== "" && isKeywordsLoading);
   const hasError = !isLoading && !currentDocument;
+  const hasKeywords = (keywordsData?.keywords?.length ?? 0) > 0;
+  const hasContent = Boolean(currentDocument?.content?.trim());
+  const canGenerate = hasKeywords && hasContent;
+
+  useEffect(() => {
+    if (!keywordsData?.keywords) return;
+    const selected = keywordsData.keywords
+      .filter((kw) => kw.isSelected)
+      .map((kw) => kw.id);
+    setSelectedIds(selected);
+  }, [keywordsData]);
+
+  const toggleKeyword = (keywordId: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(keywordId)
+        ? prev.filter((idValue) => idValue !== keywordId)
+        : [...prev, keywordId],
+    );
+  };
+
+  const handleGenerateCards = async () => {
+    if (!id) return;
+    if (!canGenerate) {
+      toast({
+        title: "请先完成材料解析",
+        description: "当前材料尚未生成可用关键词或原文内容为空。",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (selectedIds.length === 0) {
+      toast({ title: "请先选择关键词", variant: "destructive" });
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      await updateKeywordsMutation.mutateAsync({ documentId: id, data: { selectedIds } });
+      const res = await generateCardsMutation.mutateAsync({
+        data: { documentId: id, keywordIds: selectedIds },
+      });
+      toast({ title: "生成成功", description: `已生成 ${res.total} 张候选卡片` });
+      setLocation(`/validate?documentId=${id}`);
+    } catch (error: any) {
+      toast({ title: "生成失败", description: error?.message ?? "请稍后重试", variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="h-full w-full overflow-y-auto">
@@ -47,7 +109,7 @@ export default function MaterialDetail() {
                 {currentDocument?.title ?? "阅读材料详情"}
               </h1>
               <p className="mt-1 text-xs md:text-sm text-muted-foreground">
-                左侧是原文内容，右侧展示从分析流程得到的关键词，并可跳转到卡片校验与继续解析。
+                右侧点击关键词进行选择，批量生成并进入卡片校验。
               </p>
             </div>
           </div>
@@ -96,9 +158,14 @@ export default function MaterialDetail() {
 
                 <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
                   {keywordsData?.keywords.map((kw) => (
-                    <Badge key={kw.id} variant={kw.isSelected ? "default" : "outline"} className="text-[11px]">
-                      {kw.word}
-                    </Badge>
+                    <button key={kw.id} type="button" onClick={() => toggleKeyword(kw.id)}>
+                      <Badge
+                        variant={selectedIds.includes(kw.id) ? "default" : "outline"}
+                        className="text-[11px]"
+                      >
+                        {kw.word}
+                      </Badge>
+                    </button>
                   ))}
                   {!keywordsData && (
                     <p className="text-xs text-muted-foreground">
@@ -107,8 +174,23 @@ export default function MaterialDetail() {
                   )}
                 </div>
 
-                <Button className="w-full mt-2" asChild>
-                  <Link href={`/validate?documentId=${id}`}>跳转到卡片校验</Link>
+                {!canGenerate && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                    当前材料尚未解析完成，请先前往解析页生成关键词与文本结构。
+                    <div className="mt-2">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href="/analyze">前往解析</Link>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  className="w-full mt-2"
+                  onClick={handleGenerateCards}
+                  disabled={!canGenerate || selectedIds.length === 0 || isGenerating}
+                >
+                  {isGenerating ? "生成中..." : "批量生成并进入卡片校验"}
                 </Button>
               </div>
             </section>

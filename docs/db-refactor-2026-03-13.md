@@ -1,101 +1,81 @@
-## 2026-03-13 数据库重构日志
+## 数据库重构与接入记录（2026-03-13 ~ 2026-03-15）
 
-### 1. SQL-new 表结构确认与对齐
+> 说明：本文件保留按日期的演进记录；**当前有效状态以 `backend-tech-doc.md` / `database-tech-doc.md` 为准**。
 
-- 阅读材料相关 SQL 脚本（已确认）：
+### 2026-03-13：SQL-new 主结构落地
+
+#### 1. 表结构对齐
+
+- 确认并接入：
   - `lib/db/sql/reading-materials.sql`
   - `lib/db/sql/keywords-add.sql`
   - `lib/db/sql/decks-tree-add.sql`
   - `lib/db/sql/flashcards-add.sql`
-- 关键新增/确认表：`keywords` / `decks` / `flashcards`
-  - `keywords` 以 `section_id` 归档，并新增 `status` 字段（`PENDING/SELECTED`）
-  - `decks` 变为树形结构（`parent_id`）
-  - `flashcards` 以 `deck_id` 归属，并可关联 `source_keyword_id`/`source_text_block_id`
+- 关键结构：
+  - `keywords` 按 `section_id` 归档，带 `status`
+  - `decks` 改为树结构（`parent_id`）
+  - `flashcards` 归属 `deck_id`，可追溯来源 keyword/text block
 
-### 2. Drizzle Schema 与 API 类型统一
+#### 2. API 与类型统一
 
-- Drizzle schema 已对齐 SQL-new：
-  - `documents` 去除 `user_id`
-  - `keywords` 使用 UUID + `section_id` + `status`
-  - 新增 `flashcards` schema
-  - `decks` 切换为 UUID + `parent_id`
-- OpenAPI + Zod + React Client 全量更新为 UUID 类型：
-  - `Keyword.id`、`TOCKeyword.id`、`Document.id`、`Deck.id`、`Card.id` 等全部改为 UUID string
-  - `UpdateKeywordSelectionsBody.selectedIds`、`GenerateCardsRequest.keywordIds` 等改为 UUID string[]
+- OpenAPI/Zod/React Client ID 类型统一为 UUID string
+- `selectedIds`、`keywordIds` 等数组参数全部改为 UUID 列表
 
-### 3. 文档解析接口（DeepSeek）
+#### 3. 文档解析重构
 
-- `POST /api/documents/analyze` 重构为 SQL-new 结构写入：
-  - `documents` / `text_blocks` / `sections`
-  - `keywords` 写入 `section_id` 维度
-- DeepSeek 输出为 JSON 数组，过滤 `score < 3`
-- `toc` 节点包含关键词列表（UUID）
-
-### 4. 旧接口停用（过渡期）
-
-- `/api/cards/*`、`/api/reviews/*`、`/api/analytics/*`、`/api/decks/*` 暂停使用（返回 501）
-- 等待 flashcards + decks tree API 重新接入后恢复前端流转
-
-### 5. 配置与开发修订
-
-- `artifacts/api-server/.env` 仅保留占位：
-  - `DEEPSEEK_API_KEY=your_api_key_here`
-  - `DATABASE_URL=postgresql://srs_user:srs_password@localhost:5432/srs_db`
-- 前端本地代理需要显式设置：
-  - `API_TARGET=http://localhost:4000 pnpm dev`
-
-### 6. 相关文档更新
-
-- `docs/backend-tech-doc.md`
-- `docs/database-tech-doc.md`
-- `docs/frontend-tech-doc.md`
-- `docs/local-dev-quickstart.md`
+- `POST /api/documents/analyze` 按 SQL-new 写入 `text_blocks/sections/keywords`
+- `toc` 节点挂载 UUID 关键词引用
 
 ---
 
-## 2026-03-14 用户体系与数据隔离
+### 2026-03-14：用户体系与数据隔离
 
-### 1. 用户表与关联
+#### 1. 用户与归属
 
-- 新增 `users` 表（UUID 主键、email 唯一、password_hash）
-- `documents` / `decks` 新增 `user_id` 外键（ON DELETE CASCADE）
+- 新增 `users` 表（UUID 主键）
+- `documents` / `decks` 增加 `user_id` 外键（`ON DELETE CASCADE`）
 
-### 2. 鉴权与会话
+#### 2. 鉴权
 
-- `POST /api/auth/register` / `POST /api/auth/login` 实现 bcrypt + JWT
-- 使用 HTTP-only Cookie `srs_token` 保存会话
-- `GET /api/auth/me` 依赖 `requireAuth`
-
-### 3. 数据隔离
-
-- `GET /api/documents` / `GET /api/decks` 返回当前用户数据
-- `POST /api/documents/analyze` / `POST /api/decks` 强制绑定 `user_id`
+- `register/login/me/logout` 接口完成 JWT + Cookie 会话
+- 受保护资源按用户隔离访问
 
 ---
 
-## 2026-03-15 复习与卡片流转重启
+### 2026-03-15：复习链路与候选卡片恢复
 
-### 1. SM-2 与复习日志
+#### 1. 复习
 
-- flashcards 补齐 SM-2 字段（repetition/interval/ease_factor/next_review_date）。
-- review_logs 改为 UUID 外键，并新增 user_id 用于用户级统计。
-- /api/reviews/due 实现到期卡片拉取与 todayReviewed 统计。
-- /api/reviews/log 实现评分写入 + SM-2 更新。
+- `flashcards` 补齐 SM-2 字段：`repetition/interval/ease_factor/next_review_date`
+- `review_logs` 接入 `user_id` + `card_id`
+- `/api/reviews/due`、`/api/reviews/log` 恢复
 
-### 2. 候选卡片流程
+#### 2. 候选卡片流程
 
-- 新增 card_candidates 表（pending/validate 流程）。
-- /api/cards/generate 生成候选卡片并写入 card_candidates。
-- /api/cards/pending /api/cards/validate/batch /api/cards/batch-assign-deck 全部恢复。
-- /api/cards/batch 用于批量写入 flashcards。
+- 新增 `card_candidates`
+- 恢复：
+  - `/api/cards/generate`
+  - `/api/cards/pending`
+  - `/api/cards/validate/batch`
+  - `/api/cards/batch-assign-deck`
+  - `/api/cards/batch`
 
-### 3. 卡片组与分析接口
+#### 3. 统计与卡片组
 
-- /api/decks/:id 恢复，返回卡片组详情与卡片列表。
-- /api/analytics/heatmap 与 /api/analytics/summary 恢复。
+- `/api/decks/:id` 恢复
+- `/api/analytics/heatmap`、`/api/analytics/summary` 恢复
 
-### 4. API 类型对齐
+#### 4. 卡片生成质量优化（本次）
 
-- LogReviewRequest grade 范围调整为 0-5。
-- keywordId 允许为 null（未绑定关键词的卡片）。
-- review 的 deckId 查询参数改为 UUID string。
+- `cards/generate` 改为关键词邻近上下文抽取
+- 增加候选卡片过滤：长度、重复、问答相似度
+- Prompt 强约束：单一概念、严格 JSON 输出
+
+#### 5. 线上排错记录（本次）
+
+- 现象：关键词选择后生成卡片返回 HTTP 500
+- 根因：数据库缺失 `card_candidates` 表（日志：`relation "card_candidates" does not exist`）
+- 处理：执行并确认
+  - `lib/db/sql/card-candidates-add.sql`
+  - `lib/db/sql/flashcards-sm2-add.sql`
+  - `lib/db/sql/review-logs-add.sql`

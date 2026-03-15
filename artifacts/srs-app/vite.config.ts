@@ -22,7 +22,7 @@ const resolvedBasePath = basePath && basePath.trim().length > 0 ? basePath : "/"
 // Backend API base URL for local dev proxy.
 const apiTarget = process.env.API_TARGET && process.env.API_TARGET.trim().length > 0
   ? process.env.API_TARGET
-  : "http://localhost:3000";
+  : "http://localhost:4000";
 
 export default defineConfig({
   base: resolvedBasePath,

@@ -3,118 +3,109 @@
 ### 1. 概览
 
 - **名称**：`@workspace/srs-app`
-- **职责**：提供 AI 记忆引擎的 Web 前端界面，覆盖：
-  - 文档解析与关键词筛选
-  - AI 生成卡片的人机协同校验（部分旧流转）
-  - 学习统计与可视化分析（旧流转）
-  - 用户注册登录与会话管理展示
+- **职责**：提供 AI 记忆引擎 Web 前端，覆盖：
+  - 阅读材料创建与解析
+  - 关键词选择与候选卡片生成
+  - 候选卡片校验并入组
+  - 复习统计与可视化分析
+  - 用户注册登录与访客会话
 
-> 说明：后端已迁移到 SQL-new 结构，cards/reviews/analytics 接口已恢复并对齐 UUID 结构；`/decks` 与 `/documents` 已按新结构可用。
+> 说明：后端已对齐 SQL-new + UUID 结构，`cards/reviews/analytics/decks/documents` 相关接口已可用。
 
 ### 2. 技术栈与依赖
 
 - **语言**：TypeScript + JSX
 - **框架**：React
 - **路由**：`wouter`
-- **数据获取与缓存**：`@tanstack/react-query`
-- **UI 与样式**：
-  - Tailwind CSS
-  - Radix UI 组件（Accordion、Dialog、Tooltip、Tabs 等）
-  - 自定义 UI 组件封装在 `src/components/ui/*`
-- **图表与动效**：
-  - `framer-motion`
-  - `recharts`
-  - `canvas-confetti`
-- **API 客户端**：`@workspace/api-client-react`（OpenAPI + Orval 生成）
+- **数据层**：`@tanstack/react-query` + `@workspace/api-client-react`
+- **样式与组件**：Tailwind CSS + Radix UI + 自定义 `src/components/ui/*`
+- **动效/图表**：`framer-motion`、`recharts`、`canvas-confetti`
 
-### 3. 目录结构
+### 3. 路由与页面
 
-- **根目录**
-  - `package.json`：前端应用依赖与脚本
-  - `vite.config.ts`：Vite 配置
-  - `tsconfig.json`：该包的 TS 配置（继承根 `tsconfig.base.json`）
+#### 3.1 `App.tsx` 已注册路由
 
-- **src/**
-  - `main.tsx`：应用入口
-  - `App.tsx`：整体布局、路由与全局 Provider
-  - `index.css`：全局样式
-  - `contexts/AuthContext.tsx`：认证上下文
-  - `pages/`：主要业务页面
-    - `dashboard.tsx`
-    - `analyze.tsx`
-    - `validate.tsx`
-    - `analytics.tsx`
-    - `material-new.tsx` / `material-detail.tsx`
-    - `deck-detail.tsx`
-    - `not-found.tsx`
+- `/`、`/dashboard`：总览面板（`dashboard.tsx`）
+- `/materials/new`：新建阅读材料（`material-new.tsx`）
+- `/materials/:id`：阅读材料详情（`material-detail.tsx`）
+- `/validate`：候选卡片校验（`validate.tsx`）
+- `/decks/:id`：卡片组详情（`deck-detail.tsx`）
+- `/analytics`：学习分析（`analytics.tsx`）
+- `/login`、`/register`：登录注册
 
-### 4. 核心页面与状态说明
+#### 3.2 未挂载页面
 
-#### 4.1 文档解析与关键词筛选（Analyze）
+- `src/pages/analyze.tsx` 仍在仓库中，但当前未在 `App.tsx` 注册路由。
 
-- 文件：`src/pages/analyze.tsx`
-- **Stage 1：输入文本**
-  - 支持粘贴/拖拽 `.txt`/`.md`
-  - 调用 `useAnalyzeDocument`（`POST /api/documents/analyze`）
-- **Stage 2：关键词筛选（双栏）**
-  - 左侧：原文分段 + 高亮（`HighlightedText`）
-  - 右侧：TOC 树（Radix Accordion）
-  - 关键词 ID 为 UUID 字符串（与后端一致）
-- **关键联动**：
-  - 展开章节 → 左侧滚动定位
-  - 点击关键词 → 高亮与选中状态同步
-  - 生成候选卡片后跳转 `/validate?documentId=...`
+### 4. 核心页面流转
 
-#### 4.2 总览面板（Dashboard）
-
-- 文件：`src/pages/dashboard.tsx`
-- 拉取 `GET /api/documents` 与 `GET /api/decks` 渲染“我的文档列表 / 我的卡片组列表”
-- 支持阅读材料与卡片组删除
-- 新建材料与卡片组创建后，使用 `setLocation` 跳转至详情页
-
-#### 4.3 新建阅读材料（Notebook 风格）
+#### 4.1 新建阅读材料（Notebook）
 
 - 文件：`src/pages/material-new.tsx`
-- 先 `POST /api/documents` 创建文档，再 `POST /api/documents/analyze` 分析；成功后跳转 `/materials/:id`。
+- 流程：
+  1. `POST /api/documents` 创建文档
+  2. `POST /api/documents/analyze`（请求体：`{ documentId, text }`）
+  3. 成功后跳转 `/materials/:id`
 
-#### 4.4 阅读材料详情
+#### 4.2 阅读材料详情
 
 - 文件：`src/pages/material-detail.tsx`
-- 展示阅读材料原文与关键词徽章列表（关键词 ID 为 UUID）。
+- 能力：
+  - 展示原文与关键词列表
+  - 点击关键词本地选择
+  - 提交时先 `PUT /api/documents/:id/keywords`，再 `POST /api/cards/generate`
+  - 生成成功后跳转 `/validate?documentId=:id`
 
-#### 4.5 旧流程页面（待迁移）
+#### 4.3 卡片校验页
 
-- `validate.tsx` / `analytics.tsx` / `deck-detail.tsx`
-- `review.tsx` 已从路由中移除（统一入口调整为专属详情页）。
-- cards/reviews/analytics API 已恢复；`validate` 走候选卡片流程，`review` 走 SM-2 复习。
+- 文件：`src/pages/validate.tsx`
+- 数据来源：`GET /api/cards/pending?documentId=...`
+- 提交流程：
+  - `PUT /api/cards/validate/batch` 保存 keep/edit/discard
+  - 若有卡片组分配：`PATCH /api/cards/batch-assign-deck`
+- 当前行为：
+  - 若没有待校验卡片，展示空状态并返回阅读材料
+  - 若有 keep/edit 但未选择卡片组，不允许提交
+
+#### 4.4 总览页
+
+- 文件：`src/pages/dashboard.tsx`
+- 拉取 `GET /api/documents` 与 `GET /api/decks`
+- 支持删除阅读材料与卡片组
+- 页面里保留了“开始今日复习”入口（`/review`），但该路由当前未注册，点击会进入 404（待清理）
 
 ### 5. 认证逻辑（AuthContext）
 
 - 文件：`src/contexts/AuthContext.tsx`
-- 通过 `/api/auth/me` 获取当前用户；使用 HTTP-only Cookie 维持会话。
-- `AuthUser`：`{ id: string; email: string }`
-  - 登录后会话保持不再在 `visibilitychange` 中强制登出。
+- 优先通过 Cookie 会话访问 `/api/auth/me`
+- `401` 时会自动尝试 `POST /api/auth/guest` 创建访客身份
+- 访客 token 存在 `sessionStorage`，并通过 `Authorization: Bearer ...` 参与鉴权
+- `beforeunload` 会触发 `/api/auth/logout`，访客账户会在后端清理
 
-### 6. 与后端的交互约定
+### 6. 与后端交互约定
 
-- API 全部通过 `@workspace/api-client-react` hooks 调用。
-- 关键词、文档、卡片等 ID 在新结构下均为 **UUID 字符串**。
-  - `keywordId` 允许为 `null`。
+- 关键词、文档、卡片、卡片组 ID 全部为 **UUID 字符串**
+- `keywordId` 可为 `null`
+- 生成卡片入口为 `POST /api/cards/generate`（候选卡片）
 
 ### 7. 本地开发与代理
 
-- 前端默认代理：`vite.config.ts` 中 `API_TARGET` 为空时指向 `http://localhost:3000`。
-- **后端当前运行在 4000 端口时，需要显式指定**：
+- `vite.config.ts` 默认把 `/api` 代理到 `http://localhost:4000`
+- 常规本地启动可直接执行：
 
 ```bash
-API_TARGET=http://localhost:4000 pnpm dev
+pnpm dev
 ```
 
-- 否则前端会请求错误的后端端口，导致 404/500 与日志缺失。
+- 若后端不在 4000，可覆盖：
+
+```bash
+API_TARGET=http://localhost:<port> pnpm dev
+```
 
 ### 8. 近期更新（2026-03-15）
 
-- `dashboard` 接入真实文档列表与删除入口。
-- `material-new` 改为“先创建文档再分析”。
-- `analyze` 在生成卡片后跳转到带 documentId 的校验页。
-- `validate` 只有选择卡片组后才允许提交保留卡片。
+- `material-detail` 增加“关键词选择 -> 生成候选卡片 -> 跳转校验页”闭环。
+- `validate` 空数据场景改为明确空状态页，不再直接重定向。
+- 文案更新为“批量生成并进入卡片校验”。
+- 前端默认 API 代理从 `3000` 调整为 `4000`。

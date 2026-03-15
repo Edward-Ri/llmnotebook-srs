@@ -528,7 +528,7 @@ export default function Analyze() {
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  展开章节查看关键词，点击章节可定位左侧原文段落
+                  点击关键词进行选择，完成后批量生成进入卡片校验
                 </p>
               </div>
 
@@ -627,7 +627,7 @@ export default function Analyze() {
                     "disabled:opacity-30 disabled:cursor-not-allowed",
                   ].join(" ")}
                 >
-                  确认选择，继续生成卡片
+                  批量生成并进入卡片校验
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <button

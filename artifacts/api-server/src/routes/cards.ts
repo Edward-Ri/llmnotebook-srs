@@ -75,6 +75,94 @@ function parseCardsJson(raw: string): LlmCard[] {
   }
 }
 
+const MIN_FRONT_LENGTH = 6;
+const MIN_BACK_LENGTH = 8;
+const MAX_FRONT_LENGTH = 200;
+const MAX_BACK_LENGTH = 600;
+const MAX_CARD_COUNT = 4;
+const NEIGHBOR_WINDOW = 1;
+
+function normalizeForCompare(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]/gu, "")
+    .trim();
+}
+
+function isTooSimilar(front: string, back: string): boolean {
+  const a = normalizeForCompare(front);
+  const b = normalizeForCompare(back);
+  if (!a || !b) return true;
+  if (a.includes(b) || b.includes(a)) {
+    const lenRatio = Math.max(a.length, b.length) / Math.min(a.length, b.length);
+    if (lenRatio < 1.4) return true;
+  }
+  const setA = new Set(a.split(""));
+  const setB = new Set(b.split(""));
+  const minSize = Math.min(setA.size, setB.size);
+  if (minSize === 0) return true;
+  let intersection = 0;
+  for (const ch of setA) {
+    if (setB.has(ch)) intersection += 1;
+  }
+  return intersection / minSize >= 0.85;
+}
+
+function filterCards(cards: LlmCard[]): LlmCard[] {
+  const seen = new Set<string>();
+  const result: LlmCard[] = [];
+  for (const card of cards) {
+    const front = card.front.trim();
+    const back = card.back.trim();
+    if (
+      front.length < MIN_FRONT_LENGTH ||
+      back.length < MIN_BACK_LENGTH ||
+      front.length > MAX_FRONT_LENGTH ||
+      back.length > MAX_BACK_LENGTH
+    ) {
+      continue;
+    }
+    if (isTooSimilar(front, back)) continue;
+    const key = `${normalizeForCompare(front)}||${normalizeForCompare(back)}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push({ front, back });
+    if (result.length >= MAX_CARD_COUNT) break;
+  }
+  return result;
+}
+
+function findKeywordCenterIndex(
+  blocks: { positionIndex: number; content: string }[],
+  keyword: string,
+): number | null {
+  const kw = keyword.trim();
+  if (!kw) return null;
+  const lower = kw.toLowerCase();
+  for (let i = 0; i < blocks.length; i += 1) {
+    if (blocks[i].content.toLowerCase().includes(lower)) return i;
+  }
+  return null;
+}
+
+function buildNeighborhoodBlocks(
+  blocks: { positionIndex: number; content: string }[],
+  keyword: string,
+  sectionStart: number,
+  sectionEnd: number,
+) {
+  const center = findKeywordCenterIndex(blocks, keyword);
+  if (center !== null) {
+    const start = Math.max(0, center - NEIGHBOR_WINDOW);
+    const end = Math.min(blocks.length - 1, center + NEIGHBOR_WINDOW);
+    return blocks.slice(start, end + 1);
+  }
+  const safeStart = Math.max(0, Math.min(sectionStart, blocks.length - 1));
+  const safeEnd = Math.max(safeStart, Math.min(sectionEnd, blocks.length - 1));
+  const fallbackEnd = Math.min(safeStart + 2, safeEnd);
+  return blocks.slice(safeStart, fallbackEnd + 1);
+}
+
 router.post("/batch", requireAuth, async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -175,29 +263,47 @@ router.post("/generate", requireAuth, async (req, res) => {
     for (const kw of keywords) {
       const start = Number(kw.startBlockIndex ?? 0);
       const end = Number(kw.endBlockIndex ?? blockContents.length - 1);
-      const contextBlocks = blockContents.slice(start, end + 1);
-      const contextRaw = contextBlocks.join("\n\n");
-      const context = contextRaw.length > 4000 ? contextRaw.slice(0, 4000) : contextRaw;
+      const neighborhood = buildNeighborhoodBlocks(blocks, kw.word, start, end);
+      const contextRaw = neighborhood.map((b) => b.content).join("\n\n");
+      const context = contextRaw.length > 2000 ? contextRaw.slice(0, 2000) : contextRaw;
+      const contextBlocks = neighborhood.map((b) => ({
+        index: b.positionIndex,
+        text: b.content,
+      }));
 
       const messages: ChatMessage[] = [
         {
           role: "system",
           content:
-            "你是知识卡片生成助手。根据给定关键词与上下文，生成 2-4 张高质量记忆卡片。" +
-            "仅输出严格 JSON 数组，每项包含 {\"front\":\"问题\",\"back\":\"答案\"}，不要输出其他文本。",
+            "你是学习卡片生成助手。目标是生成“可复习、可编辑、单一概念”的高质量记忆卡片。" +
+            "严格只输出 JSON 数组，每项必须包含：{\"front\":\"问题\",\"back\":\"答案\"}。" +
+            "约束规则（必须遵守）：" +
+            "1) 一张卡片只覆盖一个概念，禁止多个子问题/多点混杂。" +
+            "2) 问题要具体明确，避免泛泛而谈。" +
+            "3) 答案要简洁、确定，不要大段照抄上下文。" +
+            "4) 若上下文不足以支撑事实，宁可不生成。" +
+            "5) 生成 2-4 张卡片；若信息不足可少于 2 张。" +
+            "6) 严禁输出除 JSON 以外的任何文本。",
         },
         {
           role: "user",
-          content: JSON.stringify({
-            documentTitle: doc.title,
-            keyword: kw.word,
-            context,
-          }),
+          content:
+            "请根据以下数据生成学习卡片。只使用提供的上下文，不要引入外部知识。" +
+            "输出必须是严格 JSON 数组。" +
+            "数据：" +
+            JSON.stringify({
+              language: "zh",
+              documentTitle: doc.title,
+              keyword: kw.word,
+              contextBlocks,
+              cardCountHint: 3,
+              context,
+            }),
         },
       ];
 
       const raw = await deepseekChat(messages, { temperature: 0.2 });
-      const parsed = parseCardsJson(raw);
+      const parsed = filterCards(parseCardsJson(raw));
       for (const item of parsed) {
         pendingRows.push({
           userId,
