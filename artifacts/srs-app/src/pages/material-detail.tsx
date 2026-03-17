@@ -35,22 +35,15 @@ import {
   createNoteBlock,
   createNotebook,
   deleteReference,
-  getNotebookBlocks,
   getReferenceBlocks,
   getReferenceOutline,
   importReference,
   listNotebooks,
   listReferences,
-  removeNoteBlock,
   removeNotebook,
-  reorderNoteBlocks,
-  type NoteBlock,
-  type ReferenceBlock,
-  type ReferenceBlockDragPayload,
   type ReferenceOutlineNode,
   type ReferenceSelectionPayload,
   type WorkspaceReference,
-  updateNoteBlock,
   updateNotebook,
 } from "@/lib/workspace-api";
 
@@ -68,16 +61,6 @@ function collectKeywordIds(nodes: ReferenceOutlineNode[]): string[] {
   return [...ids];
 }
 
-function reorderIds(ids: string[], blockId: string, direction: "up" | "down") {
-  const index = ids.findIndex((id) => id === blockId);
-  if (index < 0) return ids;
-  const targetIndex = direction === "up" ? index - 1 : index + 1;
-  if (targetIndex < 0 || targetIndex >= ids.length) return ids;
-  const next = [...ids];
-  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-  return next;
-}
-
 export default function MaterialDetail() {
   const [, params] = useRoute<{ id: string }>("/materials/:id");
   const id = params?.id ?? "";
@@ -92,10 +75,6 @@ export default function MaterialDetail() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isValidationOpen, setIsValidationOpen] = useState(false);
   const [isNotebookDropActive, setIsNotebookDropActive] = useState(false);
-  const [pendingJumpSource, setPendingJumpSource] = useState<{
-    referenceId: string;
-    textBlockId: string | null;
-  } | null>(null);
 
   const {
     data: documentsData,
@@ -167,12 +146,6 @@ export default function MaterialDetail() {
     enabled: Boolean(selectedReferenceId),
   });
 
-  const noteBlocksQuery = useQuery({
-    queryKey: ["workspace", "note-blocks", selectedNotebookId],
-    queryFn: () => getNotebookBlocks(selectedNotebookId as string),
-    enabled: Boolean(selectedNotebookId),
-  });
-
   const updateKeywordsMutation = useUpdateKeywordSelections();
   const generateCardsMutation = useGenerateCards();
 
@@ -188,44 +161,11 @@ export default function MaterialDetail() {
   const notebooks = notebooksQuery.data?.notebooks ?? [];
   const outline = referenceOutlineQuery.data?.toc ?? [];
   const blocks = referenceBlocksQuery.data?.blocks ?? [];
-  const noteBlocks = noteBlocksQuery.data?.blocks ?? [];
   const currentReferenceKeywordIds = useMemo(() => collectKeywordIds(outline), [outline]);
   const visibleSelectedKeywordIds = useMemo(
     () => currentReferenceKeywordIds.filter((keywordId) => selectedIds.includes(keywordId)),
     [currentReferenceKeywordIds, selectedIds],
   );
-
-  const referenceTitleById = useMemo(() => {
-    return Object.fromEntries(references.map((reference) => [reference.id, reference.title]));
-  }, [references]);
-
-  const sourceMetaByBlockId = useMemo(() => {
-    const sourceBlockById = new Map(blocks.map((block) => [block.id, block]));
-    return Object.fromEntries(
-      noteBlocks.map((block) => {
-        const sourceBlock = block.sourceTextBlockId ? sourceBlockById.get(block.sourceTextBlockId) : undefined;
-        return [
-          block.id,
-          {
-            referenceTitle: block.sourceReferenceId ? referenceTitleById[block.sourceReferenceId] : undefined,
-            paragraphLabel: sourceBlock ? `第 ${sourceBlock.positionIndex + 1} 段` : undefined,
-          },
-        ];
-      }),
-    );
-  }, [blocks, noteBlocks, referenceTitleById]);
-
-  useEffect(() => {
-    if (!pendingJumpSource || pendingJumpSource.referenceId !== selectedReferenceId) return;
-    if (!pendingJumpSource.textBlockId) {
-      setPendingJumpSource(null);
-      return;
-    }
-    const element = document.getElementById(`reference-block-id-${pendingJumpSource.textBlockId}`);
-    if (!element) return;
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
-    setPendingJumpSource(null);
-  }, [pendingJumpSource, selectedReferenceId, blocks]);
 
   const invalidateWorkspaceQueries = useCallback(async () => {
     await Promise.all([
@@ -345,53 +285,9 @@ export default function MaterialDetail() {
     return true;
   }, [selectedNotebookId, toast]);
 
-  const refreshSelectedNotebook = useCallback(async () => {
-    if (!selectedNotebookId) return;
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] }),
-      queryClient.invalidateQueries({ queryKey: ["workspace", "note-blocks", selectedNotebookId] }),
-    ]);
-  }, [id, queryClient, selectedNotebookId]);
-
-  const handleCreateBlock = async (blockType: "text" | "heading") => {
-    if (!ensureNotebookSelected()) return;
-    try {
-      await createNoteBlock(selectedNotebookId as string, {
-        blockType,
-        content: blockType === "heading" ? "新的标题" : "新的笔记",
-      });
-      await refreshSelectedNotebook();
-    } catch (error: any) {
-      toast({
-        title: "创建笔记块失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDropReferenceBlock = async (payload: ReferenceBlockDragPayload) => {
-    if (!ensureNotebookSelected()) return;
-    try {
-      await createNoteBlock(selectedNotebookId as string, {
-        blockType: "quote",
-        content: payload.text,
-        sourceReferenceId: payload.referenceId,
-        sourceTextBlockId: payload.textBlockId,
-      });
-      await refreshSelectedNotebook();
-      toast({
-        title: "已拖入 Notebook",
-        description: `已加入第 ${payload.positionIndex + 1} 段`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "拖入失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
+  const refreshNotebookList = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] });
+  }, [id, queryClient]);
 
   const handleSendSelectionToNotebook = async (payload: ReferenceSelectionPayload) => {
     if (!ensureNotebookSelected()) return;
@@ -404,7 +300,7 @@ export default function MaterialDetail() {
         selectionOffset: payload.selectionOffset,
         selectionLength: payload.selectionLength,
       });
-      await refreshSelectedNotebook();
+      await refreshNotebookList();
       toast({
         title: "已发送选区到 Notebook",
         description: `已保存 ${payload.selectionLength} 个字符`,
@@ -412,48 +308,6 @@ export default function MaterialDetail() {
     } catch (error: any) {
       toast({
         title: "发送失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveBlock = async (blockId: string, input: { content: string }) => {
-    try {
-      await updateNoteBlock(blockId, input);
-      await refreshSelectedNotebook();
-    } catch (error: any) {
-      toast({
-        title: "保存失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteBlock = async (blockId: string) => {
-    try {
-      await removeNoteBlock(blockId);
-      await refreshSelectedNotebook();
-    } catch (error: any) {
-      toast({
-        title: "删除失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleMoveBlock = async (blockId: string, direction: "up" | "down") => {
-    if (!selectedNotebookId) return;
-    const nextOrder = reorderIds(noteBlocks.map((block) => block.id), blockId, direction);
-    if (nextOrder.join("|") === noteBlocks.map((block) => block.id).join("|")) return;
-    try {
-      await reorderNoteBlocks(selectedNotebookId, nextOrder);
-      await refreshSelectedNotebook();
-    } catch (error: any) {
-      toast({
-        title: "重排失败",
         description: error?.message ?? "请稍后重试",
         variant: "destructive",
       });
@@ -490,15 +344,6 @@ export default function MaterialDetail() {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleJumpToSource = (block: NoteBlock) => {
-    if (!block.sourceReferenceId) return;
-    setSelectedReferenceId(block.sourceReferenceId);
-    setPendingJumpSource({
-      referenceId: block.sourceReferenceId,
-      textBlockId: block.sourceTextBlockId,
-    });
   };
 
   const isWorkspaceMissing = Boolean(
@@ -579,23 +424,13 @@ export default function MaterialDetail() {
                   documentTitle={workspaceTitle}
                   notebooks={notebooks}
                   selectedNotebookId={selectedNotebookId}
-                  blocks={noteBlocks}
                   references={references}
-                  sourceMetaByBlockId={sourceMetaByBlockId}
                   isNotebooksLoading={notebooksQuery.isLoading}
-                  isBlocksLoading={noteBlocksQuery.isLoading}
                   onSelectNotebook={setSelectedNotebookId}
                   onCreateNotebook={handleCreateNotebook}
                   onRenameNotebook={handleRenameNotebook}
                   onDeleteNotebook={handleDeleteNotebook}
-                  onCreateBlock={handleCreateBlock}
-                  onSaveBlock={handleSaveBlock}
-                  onDeleteBlock={handleDeleteBlock}
-                  onMoveBlockUp={(blockId) => handleMoveBlock(blockId, "up")}
-                  onMoveBlockDown={(blockId) => handleMoveBlock(blockId, "down")}
-                  onJumpToSource={handleJumpToSource}
                   isDropActive={isNotebookDropActive}
-                  onDropReferenceBlock={handleDropReferenceBlock}
                   onDragStateChange={setIsNotebookDropActive}
                 />
               </div>
@@ -632,23 +467,13 @@ export default function MaterialDetail() {
                         documentTitle={workspaceTitle}
                         notebooks={notebooks}
                         selectedNotebookId={selectedNotebookId}
-                        blocks={noteBlocks}
                         references={references}
-                        sourceMetaByBlockId={sourceMetaByBlockId}
                         isNotebooksLoading={notebooksQuery.isLoading}
-                        isBlocksLoading={noteBlocksQuery.isLoading}
                         onSelectNotebook={setSelectedNotebookId}
                         onCreateNotebook={handleCreateNotebook}
                         onRenameNotebook={handleRenameNotebook}
                         onDeleteNotebook={handleDeleteNotebook}
-                        onCreateBlock={handleCreateBlock}
-                        onSaveBlock={handleSaveBlock}
-                        onDeleteBlock={handleDeleteBlock}
-                        onMoveBlockUp={(blockId) => handleMoveBlock(blockId, "up")}
-                        onMoveBlockDown={(blockId) => handleMoveBlock(blockId, "down")}
-                        onJumpToSource={handleJumpToSource}
                         isDropActive={isNotebookDropActive}
-                        onDropReferenceBlock={handleDropReferenceBlock}
                         onDragStateChange={setIsNotebookDropActive}
                       />
                     </div>

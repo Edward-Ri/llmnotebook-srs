@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { ArrowLeft, BookPlus, NotebookPen, Pencil, Plus, Trash2 } from "lucide-react";
-import type {
-  NoteBlock,
-  NotebookSummary,
-  ReferenceBlockDragPayload,
-  WorkspaceReference,
-} from "@/lib/workspace-api";
+import type { NotebookSummary, WorkspaceReference } from "@/lib/workspace-api";
 import { NotebookEditor } from "@/components/notebook-editor";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-type SourceMetaByBlockId = Record<string, { referenceTitle?: string; paragraphLabel?: string }>;
 type NotebookViewMode = "list" | "editor";
 
 function formatNotebookUpdatedAt(value: string) {
@@ -27,23 +21,13 @@ interface NotebookPanelProps {
   documentTitle: string;
   notebooks: NotebookSummary[];
   selectedNotebookId: string | null;
-  blocks: NoteBlock[];
   references: WorkspaceReference[];
-  sourceMetaByBlockId: SourceMetaByBlockId;
   isNotebooksLoading: boolean;
-  isBlocksLoading: boolean;
   onSelectNotebook: (notebookId: string) => void;
   onCreateNotebook: () => Promise<void>;
   onRenameNotebook: (notebook: NotebookSummary) => Promise<void>;
   onDeleteNotebook: (notebook: NotebookSummary) => Promise<void>;
-  onCreateBlock: (blockType: "text" | "heading") => Promise<void>;
-  onSaveBlock: (blockId: string, input: { content: string }) => Promise<void>;
-  onDeleteBlock: (blockId: string) => Promise<void>;
-  onMoveBlockUp: (blockId: string) => Promise<void>;
-  onMoveBlockDown: (blockId: string) => Promise<void>;
-  onJumpToSource?: (block: NoteBlock) => void;
   isDropActive: boolean;
-  onDropReferenceBlock: (payload: ReferenceBlockDragPayload) => Promise<void>;
   onDragStateChange: (active: boolean) => void;
 }
 
@@ -51,28 +35,18 @@ export function NotebookPanel({
   documentTitle,
   notebooks,
   selectedNotebookId,
-  blocks,
   references,
-  sourceMetaByBlockId,
   isNotebooksLoading,
-  isBlocksLoading,
   onSelectNotebook,
   onCreateNotebook,
   onRenameNotebook,
   onDeleteNotebook,
-  onCreateBlock,
-  onSaveBlock,
-  onDeleteBlock,
-  onMoveBlockUp,
-  onMoveBlockDown,
-  onJumpToSource,
   isDropActive,
-  onDropReferenceBlock,
   onDragStateChange,
 }: NotebookPanelProps) {
   const [viewMode, setViewMode] = useState<NotebookViewMode>("list");
   const selectedNotebook = notebooks.find((notebook) => notebook.id === selectedNotebookId) ?? null;
-  const canDropIntoEditor = selectedNotebook !== null && viewMode === "editor";
+  const isEditorOpen = selectedNotebook !== null && viewMode === "editor";
   const notebookCards = useMemo(
     () => notebooks.map((notebook) => ({
       ...notebook,
@@ -94,21 +68,14 @@ export function NotebookPanel({
     const raw = event.dataTransfer.getData("application/json");
     if (!raw) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = canDropIntoEditor ? "copy" : "none";
+    event.dataTransfer.dropEffect = isEditorOpen ? "copy" : "none";
     onDragStateChange(true);
   };
-  const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
-    const raw = event.dataTransfer.getData("application/json");
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     onDragStateChange(false);
-    if (!canDropIntoEditor || !raw) return;
+    if (!isEditorOpen) return;
+    if (!event.dataTransfer.getData("application/json")) return;
     event.preventDefault();
-    try {
-      const payload = JSON.parse(raw) as ReferenceBlockDragPayload;
-      if (payload.type !== "reference-block") return;
-      await onDropReferenceBlock(payload);
-    } catch {
-      return;
-    }
   };
   const handleOpenNotebook = (notebookId: string) => {
     onSelectNotebook(notebookId);
@@ -284,14 +251,7 @@ export function NotebookPanel({
               </div>
             )}
 
-            {isBlocksLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-12 w-56 rounded-xl" />
-                <Skeleton className="h-[360px] w-full rounded-2xl" />
-              </div>
-            ) : (
-              <NotebookEditor notebook={selectedNotebook} />
-            )}
+            <NotebookEditor notebook={selectedNotebook} />
           </>
         )}
       </div>
