@@ -45,6 +45,20 @@ export type NotebookSummary = {
   updatedAt: string;
 };
 
+export type TiptapDocNode = {
+  type: string;
+  attrs?: Record<string, unknown> | null;
+  content?: TiptapDocNode[];
+  text?: string;
+  [key: string]: unknown;
+};
+
+export type TiptapDoc = {
+  type: string;
+  content?: TiptapDocNode[];
+  [key: string]: unknown;
+};
+
 export type NoteBlock = {
   id: string;
   pageId: string;
@@ -173,6 +187,22 @@ export function removeNotebook(notebookId: string) {
 
 export function getNotebookBlocks(notebookId: string) {
   return requestJson<{ blocks: NoteBlock[] }>(`/api/notebooks/${notebookId}/blocks`);
+}
+
+export function getNotebookDoc(notebookId: string) {
+  return requestJson<{
+    notebookId: string;
+    title: string;
+    doc: TiptapDoc | null;
+  }>(`/api/notebooks/${notebookId}/doc`);
+}
+
+export function saveNotebookDoc(notebookId: string, data: { doc: TiptapDoc }) {
+  return requestJson<{ ok: true }>(`/api/notebooks/${notebookId}/doc`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 export function createNoteBlock(notebookId: string, data: CreateNoteBlockInput) {

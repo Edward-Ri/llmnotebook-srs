@@ -1,4 +1,4 @@
-import { index, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { documentsTable } from "./documents";
@@ -15,6 +15,7 @@ export const notePagesTable = pgTable(
       .notNull()
       .references(() => documentsTable.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
+    contentDoc: jsonb("content_doc"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -25,6 +26,7 @@ export const notePagesTable = pgTable(
 
 export const insertNotePageSchema = createInsertSchema(notePagesTable).omit({
   id: true,
+  contentDoc: true,
   createdAt: true,
   updatedAt: true,
 });

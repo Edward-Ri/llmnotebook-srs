@@ -50,6 +50,102 @@ const ReorderNoteBlocksRequest = z.object({
   blockIdsInOrder: z.array(z.string().uuid()).min(1),
 });
 
+const SaveNotebookDocRequest = z.object({
+  doc: z.object({
+    type: z.string().min(1),
+  }).passthrough(),
+});
+
+type TiptapDocNode = {
+  type: string;
+  attrs?: Record<string, unknown> | null;
+  content?: TiptapDocNode[];
+  text?: string;
+};
+
+type TiptapDoc = {
+  type: "doc";
+  content: TiptapDocNode[];
+};
+
+function createTextNode(text: string): TiptapDocNode[] {
+  return text.length > 0 ? [{ type: "text", text }] : [];
+}
+
+function createParagraphNode(text: string): TiptapDocNode {
+  return {
+    type: "paragraph",
+    ...(text.length > 0 ? { content: createTextNode(text) } : {}),
+  };
+}
+
+function createHeadingNode(text: string): TiptapDocNode {
+  return {
+    type: "heading",
+    attrs: { level: 2 },
+    ...(text.length > 0 ? { content: createTextNode(text) } : {}),
+  };
+}
+
+function createSourceBlockquoteNode(block: {
+  content: string;
+  sourceReferenceId: string | null;
+  sourceTextBlockId: string | null;
+  sourceReferenceTitle: string | null;
+  sourceParagraphIndex: number | null;
+  selectionOffset: number | null;
+  selectionLength: number | null;
+}): TiptapDocNode {
+  return {
+    type: "sourceBlockquote",
+    attrs: {
+      sourceReferenceId: block.sourceReferenceId,
+      sourceTextBlockId: block.sourceTextBlockId,
+      sourceReferenceTitle: block.sourceReferenceTitle,
+      sourceParagraphLabel: block.sourceParagraphIndex !== null ? `第 ${block.sourceParagraphIndex + 1} 段` : null,
+      selectionOffset: block.selectionOffset,
+      selectionLength: block.selectionLength,
+    },
+    content: [createParagraphNode(block.content)],
+  };
+}
+
+async function buildNotebookDocFromLegacyBlocks(notebookId: string) {
+  const blocks = await db
+    .select({
+      content: noteBlocksTable.content,
+      blockType: noteBlocksTable.blockType,
+      sourceReferenceId: noteBlocksTable.sourceReferenceId,
+      sourceTextBlockId: noteBlocksTable.sourceTextBlockId,
+      selectionOffset: noteBlocksTable.selectionOffset,
+      selectionLength: noteBlocksTable.selectionLength,
+      sourceReferenceTitle: referencesTable.title,
+      sourceParagraphIndex: textBlocksTable.positionIndex,
+    })
+    .from(noteBlocksTable)
+    .leftJoin(referencesTable, eq(noteBlocksTable.sourceReferenceId, referencesTable.id))
+    .leftJoin(textBlocksTable, eq(noteBlocksTable.sourceTextBlockId, textBlocksTable.id))
+    .where(eq(noteBlocksTable.pageId, notebookId))
+    .orderBy(asc(noteBlocksTable.positionIndex));
+
+  if (blocks.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "doc",
+    content: blocks.map((block) => {
+      if (block.blockType === "heading") {
+        return createHeadingNode(block.content);
+      }
+      if (block.blockType === "quote") {
+        return createSourceBlockquoteNode(block);
+      }
+      return createParagraphNode(block.content);
+    }),
+  } satisfies TiptapDoc;
+}
+
 async function findOwnedDocument(documentId: string, userId: string) {
   const [doc] = await db
     .select({ id: documentsTable.id })
@@ -67,6 +163,7 @@ async function findOwnedNotebook(notebookId: string, userId: string) {
       userId: notePagesTable.userId,
       documentId: notePagesTable.documentId,
       title: notePagesTable.title,
+      contentDoc: notePagesTable.contentDoc,
       createdAt: notePagesTable.createdAt,
       updatedAt: notePagesTable.updatedAt,
     })
@@ -297,6 +394,75 @@ router.delete("/notebooks/:notebookId", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Delete notebook failed", error);
     return res.status(500).json({ error: "删除笔记本失败" });
+  }
+});
+
+router.get("/notebooks/:notebookId/doc", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const notebookId = getSingleParam(req.params.notebookId);
+    if (!notebookId) {
+      return res.status(400).json({ error: "NOTEBOOK_ID_REQUIRED" });
+    }
+
+    const notebook = await findOwnedNotebook(notebookId, userId);
+    if (!notebook) {
+      return res.status(404).json({ error: "NOTEBOOK_NOT_FOUND" });
+    }
+
+    if (notebook.contentDoc !== null) {
+      return res.json({
+        notebookId: notebook.id,
+        title: notebook.title,
+        doc: notebook.contentDoc,
+      });
+    }
+
+    const doc = await buildNotebookDocFromLegacyBlocks(notebookId);
+    if (doc !== null) {
+      await db
+        .update(notePagesTable)
+        .set({ contentDoc: doc, updatedAt: new Date() })
+        .where(eq(notePagesTable.id, notebookId));
+    }
+
+    return res.json({
+      notebookId: notebook.id,
+      title: notebook.title,
+      doc,
+    });
+  } catch (error) {
+    console.error("Get notebook doc failed", error);
+    return res.status(500).json({ error: "获取笔记文档失败" });
+  }
+});
+
+router.put("/notebooks/:notebookId/doc", requireAuth, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const notebookId = getSingleParam(req.params.notebookId);
+    if (!notebookId) {
+      return res.status(400).json({ error: "NOTEBOOK_ID_REQUIRED" });
+    }
+
+    const notebook = await findOwnedNotebook(notebookId, userId);
+    if (!notebook) {
+      return res.status(404).json({ error: "NOTEBOOK_NOT_FOUND" });
+    }
+
+    const body = SaveNotebookDocRequest.parse(req.body);
+    await db
+      .update(notePagesTable)
+      .set({ contentDoc: body.doc, updatedAt: new Date() })
+      .where(eq(notePagesTable.id, notebookId));
+
+    return res.json({ ok: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json(error.issues);
+    }
+    console.error("Save notebook doc failed", error);
+    return res.status(500).json({ error: "保存笔记文档失败" });
   }
 });
 
