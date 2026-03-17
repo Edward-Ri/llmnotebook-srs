@@ -79,8 +79,8 @@ export default function RegisterPage() {
             {error && (
               <div className="text-sm text-destructive">{error}</div>
             )}
-            <Button type="submit" className="w-full" disabled={registerMutation.isLoading}>
-              {registerMutation.isLoading ? "注册中..." : "注册"}
+            <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
+              {registerMutation.isPending ? "注册中..." : "注册"}
             </Button>
           </form>
           <div className="mt-4 text-sm text-muted-foreground">

@@ -61,8 +61,8 @@ export default function LoginPage() {
             {error && (
               <div className="text-sm text-destructive">{error}</div>
             )}
-            <Button type="submit" className="w-full" disabled={loginMutation.isLoading}>
-              {loginMutation.isLoading ? "登录中..." : "登录"}
+            <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+              {loginMutation.isPending ? "登录中..." : "登录"}
             </Button>
           </form>
           <div className="mt-4 text-sm text-muted-foreground">
