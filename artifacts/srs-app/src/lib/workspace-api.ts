@@ -71,6 +71,14 @@ export type CreateNoteBlockInput = {
   insertAtIndex?: number | null;
 };
 
+export type ReferenceBlockDragPayload = {
+  type: "reference-block";
+  text: string;
+  referenceId: string;
+  textBlockId: string;
+  positionIndex: number;
+};
+
 async function parseErrorMessage(response: Response) {
   const raw = await response.text();
   try {

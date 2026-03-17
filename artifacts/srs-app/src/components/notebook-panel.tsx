@@ -1,9 +1,16 @@
+import type { DragEvent } from "react";
 import { BookPlus, FilePlus2, NotebookPen, Pencil, Plus, TextCursorInput, Trash2 } from "lucide-react";
-import type { NoteBlock, NotebookSummary, WorkspaceReference } from "@/lib/workspace-api";
+import type {
+  NoteBlock,
+  NotebookSummary,
+  ReferenceBlockDragPayload,
+  WorkspaceReference,
+} from "@/lib/workspace-api";
 import { NoteBlockItem } from "@/components/note-block-item";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type SourceMetaByBlockId = Record<string, { referenceTitle?: string; paragraphLabel?: string }>;
 
@@ -26,6 +33,9 @@ interface NotebookPanelProps {
   onMoveBlockUp: (blockId: string) => Promise<void>;
   onMoveBlockDown: (blockId: string) => Promise<void>;
   onJumpToSource?: (block: NoteBlock) => void;
+  isDropActive: boolean;
+  onDropReferenceBlock: (payload: ReferenceBlockDragPayload) => Promise<void>;
+  onDragStateChange: (active: boolean) => void;
 }
 
 export function NotebookPanel({
@@ -47,8 +57,32 @@ export function NotebookPanel({
   onMoveBlockUp,
   onMoveBlockDown,
   onJumpToSource,
+  isDropActive,
+  onDropReferenceBlock,
+  onDragStateChange,
 }: NotebookPanelProps) {
   const selectedNotebook = notebooks.find((notebook) => notebook.id === selectedNotebookId) ?? null;
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!selectedNotebook) return;
+    const raw = event.dataTransfer.getData("application/json");
+    if (!raw) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    onDragStateChange(true);
+  };
+  const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
+    const raw = event.dataTransfer.getData("application/json");
+    onDragStateChange(false);
+    if (!selectedNotebook || !raw) return;
+    event.preventDefault();
+    try {
+      const payload = JSON.parse(raw) as ReferenceBlockDragPayload;
+      if (payload.type !== "reference-block") return;
+      await onDropReferenceBlock(payload);
+    } catch {
+      return;
+    }
+  };
 
   return (
     <section className="flex h-full min-h-[480px] flex-col rounded-3xl border border-border/60 bg-card/80">
@@ -127,7 +161,25 @@ export function NotebookPanel({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col px-4 py-4 md:px-5">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col px-4 py-4 md:px-5",
+          isDropActive && selectedNotebook && "rounded-b-3xl bg-primary/5",
+        )}
+        onDragOver={handleDragOver}
+        onDragEnter={() => {
+          if (selectedNotebook) {
+            onDragStateChange(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          onDragStateChange(false);
+        }}
+        onDrop={(event) => {
+          void handleDrop(event);
+        }}
+      >
         {!selectedNotebook && !isNotebooksLoading && (
           <div className="flex h-full min-h-[280px] flex-col items-center justify-center rounded-3xl border border-dashed border-border/70 bg-background/50 px-6 text-center">
             <BookPlus className="mb-4 h-12 w-12 text-primary" />
@@ -153,6 +205,11 @@ export function NotebookPanel({
 
             <ScrollArea className="min-h-0 flex-1 pr-3">
               <div className="space-y-3 pb-2">
+                {isDropActive && (
+                  <div className="rounded-2xl border border-dashed border-primary bg-primary/10 px-4 py-4 text-center text-sm text-primary">
+                    松开后追加到当前 Notebook 末尾
+                  </div>
+                )}
                 {isBlocksLoading && (
                   <>
                     <Skeleton className="h-28 w-full rounded-2xl" />

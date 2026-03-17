@@ -1,6 +1,8 @@
+import type { DragEvent } from "react";
 import { BookOpen, Sparkles, Trash2, Upload } from "lucide-react";
 import type {
   ReferenceBlock,
+  ReferenceBlockDragPayload,
   ReferenceOutlineNode,
   WorkspaceReference,
 } from "@/lib/workspace-api";
@@ -66,6 +68,19 @@ export function ReferencePanel({
 }: ReferencePanelProps) {
   const flatOutline = flattenOutline(outline);
   const selectedReference = references.find((reference) => reference.id === selectedReferenceId) ?? null;
+  const handleDragStart = (event: DragEvent<HTMLElement>, block: ReferenceBlock) => {
+    if (!selectedReferenceId) return;
+    const payload: ReferenceBlockDragPayload = {
+      type: "reference-block",
+      text: block.content,
+      referenceId: selectedReferenceId,
+      textBlockId: block.id,
+      positionIndex: block.positionIndex,
+    };
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("application/json", JSON.stringify(payload));
+    event.dataTransfer.setData("text/plain", block.content);
+  };
 
   return (
     <section className="flex h-full min-h-[480px] flex-col rounded-3xl border border-border/60 bg-card/80">
@@ -163,7 +178,9 @@ export function ReferencePanel({
                   key={block.id}
                   id={`reference-block-id-${block.id}`}
                   data-position-index={block.positionIndex}
-                  className="rounded-2xl border border-border/60 bg-card/90 p-4"
+                  draggable={Boolean(selectedReferenceId)}
+                  onDragStart={(event) => handleDragStart(event, block)}
+                  className="rounded-2xl border border-border/60 bg-card/90 p-4 transition-colors active:cursor-grabbing md:cursor-grab"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>第 {block.positionIndex + 1} 段</span>

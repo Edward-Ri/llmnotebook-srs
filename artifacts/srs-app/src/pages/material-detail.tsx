@@ -46,6 +46,7 @@ import {
   reorderNoteBlocks,
   type NoteBlock,
   type ReferenceBlock,
+  type ReferenceBlockDragPayload,
   type ReferenceOutlineNode,
   type WorkspaceReference,
   updateNoteBlock,
@@ -89,6 +90,7 @@ export default function MaterialDetail() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isValidationOpen, setIsValidationOpen] = useState(false);
+  const [isNotebookDropActive, setIsNotebookDropActive] = useState(false);
   const [pendingJumpSource, setPendingJumpSource] = useState<{
     referenceId: string;
     textBlockId: string | null;
@@ -386,6 +388,29 @@ export default function MaterialDetail() {
     }
   };
 
+  const handleDropReferenceBlock = async (payload: ReferenceBlockDragPayload) => {
+    if (!ensureNotebookSelected()) return;
+    try {
+      await createNoteBlock(selectedNotebookId as string, {
+        blockType: "quote",
+        content: payload.text,
+        sourceReferenceId: payload.referenceId,
+        sourceTextBlockId: payload.textBlockId,
+      });
+      await refreshSelectedNotebook();
+      toast({
+        title: "已拖入 Notebook",
+        description: `已加入第 ${payload.positionIndex + 1} 段`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "拖入失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSaveBlock = async (blockId: string, input: { content: string }) => {
     try {
       await updateNoteBlock(blockId, input);
@@ -555,6 +580,9 @@ export default function MaterialDetail() {
                   onMoveBlockUp={(blockId) => handleMoveBlock(blockId, "up")}
                   onMoveBlockDown={(blockId) => handleMoveBlock(blockId, "down")}
                   onJumpToSource={handleJumpToSource}
+                  isDropActive={isNotebookDropActive}
+                  onDropReferenceBlock={handleDropReferenceBlock}
+                  onDragStateChange={setIsNotebookDropActive}
                 />
               </div>
             ) : (
@@ -605,6 +633,9 @@ export default function MaterialDetail() {
                         onMoveBlockUp={(blockId) => handleMoveBlock(blockId, "up")}
                         onMoveBlockDown={(blockId) => handleMoveBlock(blockId, "down")}
                         onJumpToSource={handleJumpToSource}
+                        isDropActive={isNotebookDropActive}
+                        onDropReferenceBlock={handleDropReferenceBlock}
+                        onDragStateChange={setIsNotebookDropActive}
                       />
                     </div>
                   </ResizablePanel>
