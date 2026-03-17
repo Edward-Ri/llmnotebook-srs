@@ -41,6 +41,7 @@ function NotebookEditorSurface({
   const saveTimerRef = useRef<number | null>(null);
   const latestDocRef = useRef<TiptapDoc>(initialDoc);
   const mountedRef = useRef(true);
+  const editorShellRef = useRef<HTMLDivElement | null>(null);
   const extensions = useMemo(() => createNotebookExtensions(), []);
 
   const saveDocMutation = useMutation({
@@ -255,7 +256,7 @@ function NotebookEditorSurface({
               </button>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
-              自动保存已开启。当前版本先完成富文本编辑主链路，Slash Command 下一步补齐。
+              自动保存已开启。输入 `/` 可快速切换标题、列表和引用块。
             </p>
           </div>
           <div className="shrink-0 text-xs text-muted-foreground">
@@ -280,12 +281,13 @@ function NotebookEditorSurface({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div
-          className="mx-auto max-w-3xl"
+          ref={editorShellRef}
+          className="relative mx-auto max-w-3xl"
           onDragOver={handleEditorDragOver}
           onDrop={handleEditorDrop}
         >
           {editor && <EditorBubbleMenu editor={editor} />}
-          <SlashCommandMenu editor={editor} />
+          <SlashCommandMenu editor={editor} containerRef={editorShellRef} />
           <EditorContent editor={editor} />
         </div>
       </div>
