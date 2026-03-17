@@ -1,8 +1,10 @@
-import { pgTable, uuid, text, timestamp, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, real, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { decksTable } from "./decks";
 import { keywordsTable } from "./keywords";
+import { noteBlocksTable } from "./noteBlocks";
+import { referencesTable } from "./references";
 import { textBlocksTable } from "./textBlocks";
 
 export const flashcardsTable = pgTable("flashcards", {
@@ -14,6 +16,13 @@ export const flashcardsTable = pgTable("flashcards", {
   sourceTextBlockId: uuid("source_text_block_id").references(() => textBlocksTable.id, {
     onDelete: "set null",
   }),
+  sourceNoteBlockId: uuid("source_note_block_id").references(() => noteBlocksTable.id, {
+    onDelete: "set null",
+  }),
+  sourceReferenceId: uuid("source_reference_id").references(() => referencesTable.id, {
+    onDelete: "set null",
+  }),
+  generationMode: varchar("generation_mode", { length: 32 }).default("keyword").notNull(),
   frontContent: text("front_content").notNull(),
   backContent: text("back_content").notNull(),
   repetition: integer("repetition").default(0).notNull(),
