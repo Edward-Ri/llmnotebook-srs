@@ -1,13 +1,13 @@
 import { AnyPgColumn, index, integer, pgTable, uuid, varchar } from "drizzle-orm/pg-core";
-import { documentsTable } from "./documents";
+import { referencesTable } from "./references";
 
 export const sectionsTable = pgTable(
   "sections",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    documentId: uuid("document_id")
+    referenceId: uuid("reference_id")
       .notNull()
-      .references(() => documentsTable.id, { onDelete: "cascade" }),
+      .references(() => referencesTable.id, { onDelete: "cascade" }),
     parentSectionId: uuid("parent_section_id").references((): AnyPgColumn => sectionsTable.id, {
       onDelete: "set null",
     }),
@@ -17,7 +17,7 @@ export const sectionsTable = pgTable(
     level: integer("level").notNull(),
   },
   (t) => ({
-    documentIdIdx: index("sections_document_id_idx").on(t.documentId),
+    referenceIdIdx: index("sections_reference_id_idx").on(t.referenceId),
     parentSectionIdIdx: index("sections_parent_section_id_idx").on(t.parentSectionId),
     startBlockIndexIdx: index("sections_start_block_index_idx").on(t.startBlockIndex),
     endBlockIndexIdx: index("sections_end_block_index_idx").on(t.endBlockIndex),
