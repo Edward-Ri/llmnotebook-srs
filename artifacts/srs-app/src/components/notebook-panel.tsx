@@ -1,14 +1,13 @@
 import type { DragEvent } from "react";
-import { BookPlus, FilePlus2, NotebookPen, Pencil, Plus, TextCursorInput, Trash2 } from "lucide-react";
+import { BookPlus, NotebookPen, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   NoteBlock,
   NotebookSummary,
   ReferenceBlockDragPayload,
   WorkspaceReference,
 } from "@/lib/workspace-api";
-import { NoteBlockItem } from "@/components/note-block-item";
+import { NotebookEditor } from "@/components/notebook-editor";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -192,57 +191,20 @@ export function NotebookPanel({
 
         {selectedNotebook && (
           <>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onCreateBlock("text")}>
-                <FilePlus2 className="h-4 w-4" />
-                新建文本块
-              </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onCreateBlock("heading")}>
-                <TextCursorInput className="h-4 w-4" />
-                新建标题块
-              </Button>
-            </div>
-
-            <ScrollArea className="min-h-0 flex-1 pr-3">
-              <div className="space-y-3 pb-2">
-                {isDropActive && (
-                  <div className="rounded-2xl border border-dashed border-primary bg-primary/10 px-4 py-4 text-center text-sm text-primary">
-                    松开后追加到当前 Notebook 末尾
-                  </div>
-                )}
-                {isBlocksLoading && (
-                  <>
-                    <Skeleton className="h-28 w-full rounded-2xl" />
-                    <Skeleton className="h-32 w-full rounded-2xl" />
-                  </>
-                )}
-
-                {!isBlocksLoading && blocks.length === 0 && (
-                  <div className="flex min-h-[260px] flex-col items-center justify-center rounded-3xl border border-dashed border-border/70 bg-background/50 px-6 text-center">
-                    <NotebookPen className="mb-4 h-10 w-10 text-primary" />
-                    <h3 className="text-lg font-semibold">还没有笔记</h3>
-                    <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                      可以先从左侧把整段原文送过来，也可以直接新建文本块开始记录。
-                    </p>
-                  </div>
-                )}
-
-                {!isBlocksLoading && blocks.map((block, index) => (
-                  <NoteBlockItem
-                    key={block.id}
-                    block={block}
-                    sourceMeta={sourceMetaByBlockId[block.id]}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < blocks.length - 1}
-                    onSave={onSaveBlock}
-                    onDelete={onDeleteBlock}
-                    onMoveUp={onMoveBlockUp}
-                    onMoveDown={onMoveBlockDown}
-                    onJumpToSource={onJumpToSource}
-                  />
-                ))}
+            {isDropActive && (
+              <div className="mb-4 rounded-2xl border border-dashed border-primary bg-primary/10 px-4 py-4 text-center text-sm text-primary">
+                当前版本暂时仍按旧逻辑追加到 Notebook 末尾；下一步会接入编辑器内精确插入。
               </div>
-            </ScrollArea>
+            )}
+
+            {isBlocksLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-56 rounded-xl" />
+                <Skeleton className="h-[360px] w-full rounded-2xl" />
+              </div>
+            ) : (
+              <NotebookEditor notebook={selectedNotebook} />
+            )}
           </>
         )}
       </div>
