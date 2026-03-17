@@ -97,6 +97,7 @@ export function SlashCommandMenu({ editor, containerRef }: SlashCommandMenuProps
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const filteredItems = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -109,6 +110,16 @@ export function SlashCommandMenu({ editor, containerRef }: SlashCommandMenuProps
       return haystack.includes(normalized);
     });
   }, [query]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, open]);
+
+  const runItem = (item: SlashCommandItem) => {
+    if (!editor) return;
+    item.run(editor);
+    setOpen(false);
+  };
 
   useEffect(() => {
     if (!editor) return;
@@ -155,6 +166,52 @@ export function SlashCommandMenu({ editor, containerRef }: SlashCommandMenuProps
     };
   }, [containerRef, editor]);
 
+  useEffect(() => {
+    if (!editor || !open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (filteredItems.length === 0) {
+        if (event.key === "Escape") {
+          setOpen(false);
+          return true;
+        }
+        return false;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveIndex((current) => (current + 1) % filteredItems.length);
+        return true;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveIndex((current) => (current - 1 + filteredItems.length) % filteredItems.length);
+        return true;
+      }
+
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        runItem(filteredItems[activeIndex] ?? filteredItems[0]);
+        return true;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return true;
+      }
+
+      return false;
+    };
+
+    const dom = editor.view.dom;
+    dom.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      dom.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [activeIndex, editor, filteredItems, open]);
+
   if (!editor || !open) {
     return null;
   }
@@ -174,13 +231,14 @@ export function SlashCommandMenu({ editor, containerRef }: SlashCommandMenuProps
           <CommandEmpty>没有匹配的命令</CommandEmpty>
           {filteredItems.map((item) => {
             const Icon = item.icon;
+            const isActive = filteredItems[activeIndex]?.id === item.id;
             return (
               <CommandItem
                 key={item.id}
                 value={item.id}
+                className={cn(isActive && "bg-accent text-accent-foreground")}
                 onSelect={() => {
-                  item.run(editor);
-                  setOpen(false);
+                  runItem(item);
                 }}
               >
                 <Icon className="h-4 w-4" />
