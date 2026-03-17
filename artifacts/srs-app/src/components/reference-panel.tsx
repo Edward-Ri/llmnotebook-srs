@@ -7,7 +7,6 @@ import type {
   ReferenceSelectionPayload,
   WorkspaceReference,
 } from "@/lib/workspace-api";
-import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -46,7 +45,6 @@ interface ReferencePanelProps {
   onToggleKeyword: (keywordId: string) => void;
   onGenerateCards: () => Promise<void>;
   onOpenValidation: () => void;
-  onSendSelectionToNotebook: (payload: ReferenceSelectionPayload) => Promise<void>;
 }
 
 export function ReferencePanel({
@@ -66,7 +64,6 @@ export function ReferencePanel({
   onToggleKeyword,
   onGenerateCards,
   onOpenValidation,
-  onSendSelectionToNotebook,
 }: ReferencePanelProps) {
   const flatOutline = flattenOutline(outline);
   const selectedReference = references.find((reference) => reference.id === selectedReferenceId) ?? null;
@@ -379,18 +376,6 @@ export function ReferencePanel({
           </div>
         </div>
       </div>
-      <SelectionToolbar
-        open={Boolean(selectionPayload)}
-        top={toolbarPosition.top}
-        left={toolbarPosition.left}
-        text={selectionPayload?.text ?? ""}
-        onSend={async () => {
-          if (!selectionPayload) return;
-          await onSendSelectionToNotebook(selectionPayload);
-          clearSelectionToolbar();
-          window.getSelection()?.removeAllRanges();
-        }}
-      />
     </section>
   );
 }

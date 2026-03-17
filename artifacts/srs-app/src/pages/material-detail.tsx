@@ -32,7 +32,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  createNoteBlock,
   createNotebook,
   deleteReference,
   getReferenceBlocks,
@@ -42,7 +41,6 @@ import {
   listReferences,
   removeNotebook,
   type ReferenceOutlineNode,
-  type ReferenceSelectionPayload,
   type WorkspaceReference,
   updateNotebook,
 } from "@/lib/workspace-api";
@@ -273,47 +271,6 @@ export default function MaterialDetail() {
     }
   };
 
-  const ensureNotebookSelected = useCallback(() => {
-    if (!selectedNotebookId) {
-      toast({
-        title: "请先创建或选择 Notebook",
-        description: "右侧需要先有一个可写入的 Notebook。",
-        variant: "destructive",
-      });
-      return false;
-    }
-    return true;
-  }, [selectedNotebookId, toast]);
-
-  const refreshNotebookList = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] });
-  }, [id, queryClient]);
-
-  const handleSendSelectionToNotebook = async (payload: ReferenceSelectionPayload) => {
-    if (!ensureNotebookSelected()) return;
-    try {
-      await createNoteBlock(selectedNotebookId as string, {
-        blockType: "quote",
-        content: payload.text,
-        sourceReferenceId: payload.referenceId,
-        sourceTextBlockId: payload.textBlockId,
-        selectionOffset: payload.selectionOffset,
-        selectionLength: payload.selectionLength,
-      });
-      await refreshNotebookList();
-      toast({
-        title: "已发送选区到 Notebook",
-        description: `已保存 ${payload.selectionLength} 个字符`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "发送失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleGenerateCards = async () => {
     if (!id || !selectedReferenceId) return;
     if (visibleSelectedKeywordIds.length === 0) {
@@ -418,7 +375,6 @@ export default function MaterialDetail() {
                   onToggleKeyword={handleToggleKeyword}
                   onGenerateCards={handleGenerateCards}
                   onOpenValidation={() => setIsValidationOpen(true)}
-                  onSendSelectionToNotebook={handleSendSelectionToNotebook}
                 />
                 <NotebookPanel
                   documentTitle={workspaceTitle}
@@ -456,7 +412,6 @@ export default function MaterialDetail() {
                         onToggleKeyword={handleToggleKeyword}
                         onGenerateCards={handleGenerateCards}
                         onOpenValidation={() => setIsValidationOpen(true)}
-                        onSendSelectionToNotebook={handleSendSelectionToNotebook}
                       />
                     </div>
                   </ResizablePanel>
