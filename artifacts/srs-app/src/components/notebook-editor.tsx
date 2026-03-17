@@ -25,6 +25,15 @@ interface NotebookEditorProps {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+function parseReferenceBlockDragPayload(raw: string): ReferenceBlockDragPayload | null {
+  try {
+    const payload = JSON.parse(raw) as ReferenceBlockDragPayload;
+    return payload.type === "reference-block" ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
 function NotebookEditorSurface({
   notebook,
   initialDoc,
@@ -38,7 +47,13 @@ function NotebookEditorSurface({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isDraggingReference, setIsDraggingReference] = useState(false);
+  const [dropIndicatorTop, setDropIndicatorTop] = useState<number | null>(null);
+  const [willAppendAtEnd, setWillAppendAtEnd] = useState(false);
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const dragDepthRef = useRef(0);
+  const dropNoticeTimerRef = useRef<number | null>(null);
   const latestDocRef = useRef<TiptapDoc>(initialDoc);
   const mountedRef = useRef(true);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
@@ -118,6 +133,9 @@ function NotebookEditorSurface({
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
       }
+      if (dropNoticeTimerRef.current !== null) {
+        window.clearTimeout(dropNoticeTimerRef.current);
+      }
     };
   }, []);
 
@@ -139,6 +157,52 @@ function NotebookEditorSurface({
   useEffect(() => {
     setTitle(notebook.title);
   }, [notebook.id, notebook.title]);
+
+  const clearDragFeedback = () => {
+    dragDepthRef.current = 0;
+    setIsDraggingReference(false);
+    setDropIndicatorTop(null);
+    setWillAppendAtEnd(false);
+  };
+
+  const showDropNotice = (message: string) => {
+    if (dropNoticeTimerRef.current !== null) {
+      window.clearTimeout(dropNoticeTimerRef.current);
+    }
+    setDropNotice(message);
+    dropNoticeTimerRef.current = window.setTimeout(() => {
+      setDropNotice(null);
+      dropNoticeTimerRef.current = null;
+    }, 1600);
+  };
+
+  const updateDropFeedback = (event: DragEvent<HTMLDivElement>) => {
+    if (!editor || !editorShellRef.current) return false;
+
+    const raw = event.dataTransfer.getData("application/json");
+    const payload = parseReferenceBlockDragPayload(raw);
+    if (!payload) return false;
+
+    const coordsPosition = editor.view.posAtCoords({
+      left: event.clientX,
+      top: event.clientY,
+    });
+
+    setIsDraggingReference(true);
+
+    if (coordsPosition?.pos === undefined) {
+      setDropIndicatorTop(null);
+      setWillAppendAtEnd(true);
+      return true;
+    }
+
+    const coords = editor.view.coordsAtPos(coordsPosition.pos);
+    const shellRect = editorShellRef.current.getBoundingClientRect();
+    const nextTop = Math.max(12, coords.top - shellRect.top);
+    setDropIndicatorTop(nextTop);
+    setWillAppendAtEnd(false);
+    return true;
+  };
 
   const handleCommitTitle = async () => {
     const nextTitle = title.trim();
@@ -163,11 +227,26 @@ function NotebookEditorSurface({
   };
 
   const handleEditorDragOver = (event: DragEvent<HTMLDivElement>) => {
-    const raw = event.dataTransfer.getData("application/json");
-    if (!raw) return;
+    if (!updateDropFeedback(event)) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleEditorDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    const raw = event.dataTransfer.getData("application/json");
+    if (!parseReferenceBlockDragPayload(raw)) return;
+    dragDepthRef.current += 1;
+    void updateDropFeedback(event);
+  };
+
+  const handleEditorDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    const raw = event.dataTransfer.getData("application/json");
+    if (!parseReferenceBlockDragPayload(raw)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0 && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      clearDragFeedback();
+    }
   };
 
   const handleEditorDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -178,8 +257,8 @@ function NotebookEditorSurface({
     event.stopPropagation();
 
     try {
-      const payload = JSON.parse(raw) as ReferenceBlockDragPayload;
-      if (payload.type !== "reference-block") {
+      const payload = parseReferenceBlockDragPayload(raw);
+      if (!payload) {
         return;
       }
 
@@ -210,12 +289,16 @@ function NotebookEditorSurface({
 
       if (coordsPosition?.pos !== undefined) {
         editor.chain().focus().insertContentAt(coordsPosition.pos, contentNode).run();
+        clearDragFeedback();
+        showDropNotice("已插入引用");
         return;
       }
 
       editor.chain().focus().insertContent(contentNode).run();
+      clearDragFeedback();
+      showDropNotice("已插入引用");
     } catch {
-      return;
+      clearDragFeedback();
     }
   };
 
@@ -282,10 +365,31 @@ function NotebookEditorSurface({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div
           ref={editorShellRef}
-          className="relative mx-auto max-w-3xl"
+          className={cn(
+            "relative mx-auto max-w-3xl rounded-3xl transition-colors",
+            isDraggingReference && "bg-primary/5 ring-1 ring-primary/30",
+          )}
+          onDragEnter={handleEditorDragEnter}
+          onDragLeave={handleEditorDragLeave}
           onDragOver={handleEditorDragOver}
           onDrop={handleEditorDrop}
         >
+          {isDraggingReference && dropIndicatorTop !== null && (
+            <div
+              className="pointer-events-none absolute left-3 right-3 z-20 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.35)]"
+              style={{ top: dropIndicatorTop }}
+            />
+          )}
+          {isDraggingReference && willAppendAtEnd && (
+            <div className="pointer-events-none absolute inset-x-4 bottom-3 z-20 rounded-xl border border-dashed border-primary/40 bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-sm">
+              当前无法精确定位，松开后将追加到文末。
+            </div>
+          )}
+          {dropNotice && (
+            <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-full border border-border/60 bg-background/95 px-2.5 py-1 text-xs text-muted-foreground shadow-sm">
+              {dropNotice}
+            </div>
+          )}
           {editor && <EditorBubbleMenu editor={editor} />}
           <SlashCommandMenu editor={editor} containerRef={editorShellRef} />
           <EditorContent editor={editor} />
