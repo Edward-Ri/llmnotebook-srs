@@ -1,11 +1,24 @@
-# 技术文档索引
+# 文档索引
 
-本目录存放项目各模块的独立技术文档（Markdown 格式），便于按前端、后端、数据库分开查阅与维护。
+本目录按“稳定技术文档”和“功能规划文档”分开管理，避免实现文档、路线图、阶段设计混在一起。
+
+## 1. 技术文档
+
+技术文档集中放在 `docs/technical/`，描述当前仓库已经落地的真实状态。
 
 | 文档 | 说明 |
 |------|------|
-| [frontend-tech-doc.md](./frontend-tech-doc.md) | 前端技术文档（artifacts/srs-app）：技术栈、目录结构、路由、认证、页面流转与 API 调用说明（已对齐 SQL-new/UUID） |
-| [backend-tech-doc.md](./backend-tech-doc.md) | 后端技术文档（artifacts/api-server）：技术栈、路由与接口说明、解析流程、卡片生成与鉴权会话说明 |
-| [database-tech-doc.md](./database-tech-doc.md) | 数据库技术文档（lib/db）：SQL-new 表结构、Drizzle schema 与数据关系 |
-| [local-dev-quickstart.md](./local-dev-quickstart.md) | 本地开发一键启动：数据库/后端/前端、迁移脚本与排错 |
-| [db-refactor-2026-03-13.md](./db-refactor-2026-03-13.md) | 数据库结构调整与 API 接入记录（2026-03-13 ~ 2026-03-15） |
+| [technical/frontend-tech-doc.md](./technical/frontend-tech-doc.md) | 前端技术文档：当前已实现页面、现状限制、与 Phase 3 的差异 |
+| [technical/backend-tech-doc.md](./technical/backend-tech-doc.md) | 后端技术文档：Reference / Notes API、解析链路、卡片与统计接口 |
+| [technical/database-tech-doc.md](./technical/database-tech-doc.md) | 数据库技术文档：Phase 1 数据模型、Schema、关系与迁移脚本 |
+| [technical/local-dev-quickstart.md](./technical/local-dev-quickstart.md) | 本地开发指南：依赖、数据库脚本、后端/前端启动与校验 |
+| [technical/db-refactor-2026-03-13.md](./technical/db-refactor-2026-03-13.md) | 数据库与 API 接入演进记录 |
+
+## 2. 功能规划文档
+
+规划与分阶段设计集中放在 `docs/notes-and-flashcards/`，描述目标方案、路线图和实施日志。
+
+| 文档 | 说明 |
+|------|------|
+| [notes-and-flashcards/README.md](./notes-and-flashcards/README.md) | 笔记与闪卡闭环设计索引 |
+| [notes-and-flashcards/08-implementation-log.md](./notes-and-flashcards/08-implementation-log.md) | 持续维护的实施日志 |

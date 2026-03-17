@@ -15,6 +15,7 @@
 | 05 | `05-ai-card-generation.md` | Phase 5 | AI 辅助出卡（选区出题、Q↔A 补全、文案优化）与 LLM 接口 |
 | 06 | `06-review-context-traceability.md` | Phase 6 | 复习阶段来源回溯（Reference/Notebook）与跳转定位 |
 | 07 | `07-development-roadmap.md` | 全局 | 开发路线图、依赖关系、里程碑、工作量与版本控制建议 |
+| 08 | `08-implementation-log.md` | 全局 | 长期维护的实施日志：记录各 Phase 的实际落地、校验结果与遗留事项 |
 
 ### 里程碑
 
