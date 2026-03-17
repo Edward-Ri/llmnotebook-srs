@@ -105,12 +105,6 @@ router.post("/documents/:documentId/references", requireAuth, async (req, res) =
 
     console.error("Import reference failed", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.startsWith("LLM_ERROR:")) {
-      return res.status(502).json({
-        error: "LLM_ERROR",
-        message: message.replace("LLM_ERROR:", "").trim(),
-      });
-    }
     if (message === "EMPTY_DOCUMENT") {
       return res.status(400).json({ error: "EMPTY_DOCUMENT" });
     }

@@ -235,7 +235,10 @@ router.post("/documents/:documentId/notebooks", requireAuth, async (req, res) =>
       return res.status(400).json(error.issues);
     }
     console.error("Create notebook failed", error);
-    return res.status(500).json({ error: "创建笔记本失败" });
+    return res.status(500).json({
+      error: "创建笔记本失败",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 });
 

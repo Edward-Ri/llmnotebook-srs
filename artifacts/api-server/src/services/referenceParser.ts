@@ -136,6 +136,11 @@ function selectKeywords(words: string[], sectionText: string): string[] {
     .map((item) => item.word);
 }
 
+function extractFallbackKeywords(sectionText: string): string[] {
+  const matches = sectionText.match(/[\p{L}\p{N}_-]{2,30}/gu) ?? [];
+  return selectKeywords(matches, sectionText);
+}
+
 function parseHeading(paragraph: string): { level: number; title: string } | null {
   const line = paragraph.trim();
   if (!line || line.length > 100) return null;
@@ -567,11 +572,11 @@ export async function parseReferenceContent(input: {
       },
     ];
 
-    let raw: string;
+    let raw = "";
     try {
       raw = await deepseekChat(messages, { temperature: 0.2 });
-    } catch (err: any) {
-      throw new Error(`LLM_ERROR: ${err?.message ?? "DeepSeek request failed"}`);
+    } catch {
+      raw = "";
     }
 
     const parsedWords = parseKeywordJson(raw)
@@ -579,7 +584,10 @@ export async function parseReferenceContent(input: {
       .map((item) => item.word)
       .filter((word) => typeof word === "string" && word.trim().length > 0);
 
-    const refinedWords = selectKeywords(parsedWords, sectionBlocks.join("\n"));
+    const sectionText = sectionBlocks.join("\n");
+    const refinedWords = parsedWords.length > 0
+      ? selectKeywords(parsedWords, sectionText)
+      : extractFallbackKeywords(sectionText);
     for (const word of refinedWords) {
       sectionKeywords.push({
         sectionId,
