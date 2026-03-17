@@ -22,3 +22,5 @@
 |------|------|
 | [notes-and-flashcards/README.md](./notes-and-flashcards/README.md) | 笔记与闪卡闭环设计索引 |
 | [notes-and-flashcards/08-implementation-log.md](./notes-and-flashcards/08-implementation-log.md) | 持续维护的实施日志 |
+| [notes-and-flashcards/03.1-notebook-editor-refactor.md](./notes-and-flashcards/03.1-notebook-editor-refactor.md) | Phase 3.1：Notebook 富文本编辑器重构方案 |
+| [notes-and-flashcards/03.2-reference-panel-redesign.md](./notes-and-flashcards/03.2-reference-panel-redesign.md) | Phase 3.2：Reference 面板布局重构方案 |

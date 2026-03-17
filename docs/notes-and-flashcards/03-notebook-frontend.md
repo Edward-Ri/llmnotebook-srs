@@ -31,77 +31,66 @@
 
 ### 3. 页面布局
 
-改造 `artifacts/srs-app/src/pages/material-detail.tsx`，桌面端采用左右双栏 + 底部抽屉：
+> **注意**：Phase 3.2 对本节布局做了重大重构，详见 `03.2-reference-panel-redesign.md`。以下为 Phase 3.2 后的最新布局。
+
+改造 `artifacts/srs-app/src/pages/material-detail.tsx`，桌面端采用三区布局：
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  工作区标题 · 返回按钮 · 「导入新 Reference」按钮            │
-├──────────────────────────────┬──────────────────────────────┤
-│  左栏（~60%）                │  右栏（~40%）                │
-│                              │                              │
-│  ┌─ Reference 切换器 ──────┐│  ┌─ Notebook 选择器 ────────┐│
-│  │ [Ref A] [Ref B] [+ 导入]││  │ [笔记1] [笔记2] [+ 新建] ││
-│  └──────────────────────────┘│  └──────────────────────────┘│
-│                              │                              │
-│  ┌─ 原文段落 ──────────────┐│  ┌─ 笔记块列表 ────────────┐│
-│  │ 段落 1          [📋]    ││  │ ▎ 引用块 (quote)         ││
-│  │ 段落 2          [📋]    ││  │   📎 引自 Ref A · 第3段   ││
-│  │ 段落 3          [📋]    ││  │                            ││
-│  │ ...                      ││  │ 文本块 (text)             ││
-│  └──────────────────────────┘│  │ 标题块 (heading)          ││
-│                              │  │ ...                        ││
-│  ┌─ TOC + 关键词 ──────────┐│  │                            ││
-│  │ 第一章                   ││  │ [+ 新建笔记块]             ││
-│  │   [关键词A] [关键词B]    ││  └──────────────────────────┘│
-│  │ 第二章                   ││                              │
-│  │   [关键词C] [关键词D]    ││                              │
-│  └──────────────────────────┘│                              │
-│                              │                              │
-│  已选 3 个关键词             │                              │
-│  [生成候选卡片] [校验卡片]   │                              │
-├──────────────────────────────┴──────────────────────────────┤
-│  底部抽屉（Sheet，点击「校验卡片」后滑出）                    │
-│  ┌──────────────────────────────────────────────────────────┐│
-│  │  候选卡片列表 · 通过/编辑/删除                             ││
-│  └──────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
+┌──────┬──────────────────────────────┬──────────────────┐
+│ 来源  │  阅读区（全宽原文 + 内嵌关键词）│  Notebook         │
+│侧边栏 │  ┌ Reference 标题 · 统计 ┐  │  (右栏)           │
+│(可收缩)│  │ 段落 1            [📋] │  │                  │
+│       │  │ 段落 2            [📋] │  │  笔记块列表       │
+│Ref A  │  │ 段落 3                 │  │  ...              │
+│Ref B  │  │ ▶ 段落1-3 · 信息检索   │  │                  │
+│+导入  │  │ 段落 4                 │  │                  │
+│       │  │                        │  │                  │
+│       │  │ [已选3个关键词 生成卡片]│  │                  │
+│       │  └────────────────────────┘  │                  │
+└──────┴──────────────────────────────┴──────────────────┘
 ```
 
-- 使用现有 `resizable.tsx` 实现左右两栏宽度可拖拽调节。
-- 底部抽屉使用现有 `sheet.tsx` 组件，方向设为 bottom。
+- **左侧边栏**（~260px，可收缩至 ~48px）：Reference 列表 + 导入按钮。
+- **阅读区**（占据主体宽度）：全宽原文段落 + 内嵌 Collapsible 章节关键词 + 底部浮动操作条。
+- **右栏**：Notebook 编辑区，与阅读区通过 `ResizableHandle` 可拖拽调节比例。
+- **候选卡片校验**：右侧滑出面板，临时替换 Notebook 面板（桌面端），移动端回退为底部 Sheet。
 
-### 4. 左栏：Reference 管理与原文展示
+### 4. 左侧边栏 + 阅读区：Reference 管理与原文展示
 
-#### 4.1 Reference 切换器
+> **注意**：Phase 3.2 将原左栏拆分为「可收缩来源侧边栏」和「全宽阅读区」。完整技术方案参见 `03.2-reference-panel-redesign.md`。
 
-- 工作区顶部显示已导入的 Reference 列表，以 Tab 或横向滚动按钮呈现。
-- 末尾提供「+ 导入新 Reference」按钮，点击弹出导入 Dialog。
-- 切换 Reference 时，下方原文段落和 TOC/关键词同步更新。
+#### 4.1 来源侧边栏（`reference-source-sidebar.tsx`）
+
+- 展开状态（~260px）：显示"来源"标签 + 收起图标 + 已导入 Reference 列表 + 「+ 导入」按钮。
+- 收起状态（~48px）：仅显示展开图标，内容 `overflow-hidden`。
+- 切换动画：CSS `transition-[width] duration-200 ease-in-out`。
+- Reference 切换：点击列表项切换，阅读区同步更新。
 
 #### 4.2 导入 Reference Dialog
 
 - 基于现有 `dialog.tsx` 组件。
 - 表单字段：标题（输入框）+ 文本内容（textarea，支持粘贴和拖拽 .txt/.md 文件）。
-- 提交后调用 `POST /api/documents/:documentId/references`，解析完成后 Dialog 关闭，左栏自动切换到新 Reference。
+- 提交后调用 `POST /api/documents/:documentId/references`，解析完成后 Dialog 关闭，阅读区自动切换到新 Reference。
 
-#### 4.3 原文段落展示
+#### 4.3 阅读区原文段落展示
 
-- 按 `position_index` 升序渲染当前 Reference 的 text_blocks。
+- 按 `position_index` 升序渲染当前 Reference 的 text_blocks，全宽展示。
 - 每个段落元素设置 `id="text-block-${textBlockId}"`，便于后续定位跳转。
 - 每段右侧显示轻量「📋」图标按钮，点击后将整段发送到当前 Notebook 末尾。
 - 支持文本选区交互（详见第 6 节）。
 
-#### 4.4 TOC + 关键词区
+#### 4.4 内嵌章节关键词（Collapsible）
 
-- 展示当前 Reference 的 sections 层级结构（复用现有 outline 渲染逻辑）。
-- 每个 section 内嵌关键词 Badge（可点选切换选中状态）。
-- 点击 section 标题滚动到对应原文段落。
+- 在每组段落**之后**插入折叠式章节分隔，使用 `collapsible.tsx` 组件。
+- 默认折叠状态显示章节标题和段落范围，展开后显示该节关键词 Badge（可点选切换选中状态）。
+- 点击章节标题可滚动到对应段落位置。
 
-#### 4.5 底部工具条
+#### 4.5 底部浮动操作条
 
-- 显示已选关键词数量。
-- 「生成候选卡片」按钮：选中关键词后可用，调用现有卡片生成接口。
-- 「校验候选卡片」按钮：打开底部抽屉。
+- 条件渲染：仅 `selectedKeywordIds.length > 0` 时显示。
+- 定位：`sticky bottom-0` + `backdrop-blur-md` 半透明背景。
+- 内容：已选关键词数量 + 「生成候选卡片」按钮。
+- 未选中关键词时完全隐藏，保持阅读区干净。
 
 ### 5. 右栏：多 Notebook 编辑区
 
@@ -182,12 +171,14 @@ type DragPayload = {
 - **移动端/触屏**：拖拽不可用，纯依赖选区浮动工具栏。
 - **无选区时**：每个段落右侧保留轻量「📋」图标按钮，点击后将整段发送到 Notebook 末尾。
 
-### 7. 底部抽屉：候选卡片校验
+### 7. 候选卡片校验
 
-- 基于现有 `sheet.tsx` 组件，方向设为 `bottom`，高度约占视口 60%。
-- 点击左栏「校验候选卡片」按钮后滑出。
+> **注意**：Phase 3.2 将校验入口从底部抽屉改为右侧滑出面板。完整技术方案参见 `03.2-reference-panel-redesign.md`。
+
+- **桌面端**：校验面板从右侧滑出，临时替换 Notebook 面板，用户可同时查看阅读区原文对照审核。
+- **移动端**：回退为底部 Sheet（保留原有 `sheet.tsx` 实现）。
 - 内容复用现有 `DocumentCardValidation` 组件逻辑，调整查询为工作区级别（可按 Reference 筛选）。
-- 校验完毕后可手动收起（点击遮罩或关闭按钮）。
+- 关闭校验面板后，Notebook 面板恢复显示。
 
 ### 8. 权限与数据隔离
 
@@ -204,11 +195,15 @@ type DragPayload = {
 
 ### 10. 实现清单
 
-1. 改造 `artifacts/srs-app/src/pages/material-detail.tsx`（左右双栏布局 + 底部抽屉）
-2. 新建 `artifacts/srs-app/src/components/reference-panel.tsx`（左栏：Reference 切换器 + 原文 + TOC）
-3. 新建 `artifacts/srs-app/src/components/reference-import-dialog.tsx`（导入 Reference 弹窗）
-4. 新建 `artifacts/srs-app/src/components/notebook-panel.tsx`（右栏：Notebook 选择器 + 笔记块编辑区）
-5. 新建 `artifacts/srs-app/src/components/selection-toolbar.tsx`（选区浮动工具栏）
-6. 新建 `artifacts/srs-app/src/components/note-block-item.tsx`（笔记块渲染组件，按类型区分样式）
-7. 在原文段落渲染中增加拖拽支持（draggable + dragstart 数据封装）
-8. 在 Notebook 编辑区增加 drop zone 逻辑（onDragOver 插入线 + onDrop 创建块）
+> Phase 3 基础实现 + Phase 3.2 布局重构合并后的完整清单。
+
+1. 改造 `artifacts/srs-app/src/pages/material-detail.tsx`（三区布局：来源侧边栏 + 阅读区 + 右栏 Notebook）
+2. 新建 `artifacts/srs-app/src/components/reference-source-sidebar.tsx`（可收缩来源侧边栏）
+3. 新建/重构 `artifacts/srs-app/src/components/reference-panel.tsx`（全宽阅读区 + 内嵌 Collapsible 关键词 + 浮动操作条）
+4. 新建 `artifacts/srs-app/src/components/reference-import-dialog.tsx`（导入 Reference 弹窗）
+5. 新建 `artifacts/srs-app/src/components/notebook-panel.tsx`（右栏：Notebook 选择器 + 笔记块编辑区）
+6. 新建 `artifacts/srs-app/src/components/selection-toolbar.tsx`（选区浮动工具栏）
+7. 新建 `artifacts/srs-app/src/components/note-block-item.tsx`（笔记块渲染组件，按类型区分样式）
+8. 在原文段落渲染中增加拖拽支持（draggable + dragstart 数据封装）
+9. 在 Notebook 编辑区增加 drop zone 逻辑（onDragOver 插入线 + onDrop 创建块）
+10. 候选卡片校验面板（右侧滑出替换 Notebook，桌面端；底部 Sheet，移动端）

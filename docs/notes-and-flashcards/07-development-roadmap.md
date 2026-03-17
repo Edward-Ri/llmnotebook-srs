@@ -23,8 +23,17 @@ Phase 3（前端工作区）  →  03-notebook-frontend.md
   ↓                      左右双栏布局、Reference 切换、多 Notebook 编辑区、
                          选区浮动工具栏 + 拖拽、底部卡片校验抽屉
                                         ★ Milestone A：可用的工作区
+Phase 3.1（Notebook 编辑器重构）  →  09-notebook-editor-refactor.md
+  ↓                      Tiptap 富文本块编辑器、content_doc JSONB、
+                         右栏两级导航、节点 UUID 来源追踪、拖拽集成
+                                        ★ Milestone A+：Notebook 体验升级
+Phase 3.2（Reference 面板重构）  →  03.2-reference-panel-redesign.md
+  ↓                      三区布局、可收缩来源侧边栏、全宽阅读区、
+                         内嵌 Collapsible 关键词、浮动操作条、
+                         右侧滑出校验面板
+                                        ★ Milestone A++：阅读体验优化
 Phase 4（手动出卡）  →  04-manual-card-creation.md
-  ↓                      通用卡片编辑弹窗、POST /api/cards/manual
+  ↓                      通用卡片编辑弹窗、BubbleMenu 出卡入口、POST /api/cards/manual
                                         ★ Milestone B：最短闭环跑通
 Phase 5（AI 辅助出卡）  →  05-ai-card-generation.md
   ↓                      选区 AI 出题、Q↔A 补全、文案润色
@@ -38,14 +47,22 @@ Phase 6（复习来源回溯）  →  06-review-context-traceability.md
 
 - Phase 2 → Phase 1：所有 API 需要新表和新字段已存在。
 - Phase 3 → Phase 2：前端调用 Reference API 和 Notes API。
-- Phase 4 → Phase 3：选区出卡需要选区浮动工具栏和 Notebook 已存在。
+- Phase 3.1 → Phase 3：在已有双栏布局基础上重构 Notebook 为 Tiptap 编辑器。
+- Phase 3.2 → Phase 3：在已有布局基础上重构为三区布局（纯前端 UI，不涉及后端或数据模型）。
+- Phase 4 → Phase 3.1：出卡入口依赖 Tiptap BubbleMenu 和 SourceBlockquote 节点。
 - Phase 5 → Phase 4：AI 出卡复用 Phase 4 的通用卡片编辑弹窗与数据管线。
-- Phase 6 → Phase 4/5：来源回溯需要前序阶段已正确写入 `source_*` / `generation_mode` 字段。
+- Phase 6 → Phase 4/5：来源回溯需前序阶段已正确写入 `source_*` / `generation_mode`，且需从 `content_doc` JSON 提取笔记来源。
 
 ### 3. 里程碑与发布节奏
 
 - **Milestone A（Phase 1–3 完成）**：
   工作区可用：用户可创建工作区、导入多份 Reference（各自独立解析）、创建多本 Notebook、边读边记、从原文选区/拖拽发送到笔记。可独立发布，收集双栏布局与选区交互体验反馈。
+
+- **Milestone A+（Phase 3.1 完成）**：
+  Notebook 体验升级：Tiptap 富文本块编辑器替代旧的卡片式纯文本编辑，右栏两级导航，划选拖拽到编辑器生成 SourceBlockquote。
+
+- **Milestone A++（Phase 3.2 完成）**：
+  阅读体验优化：三区布局（可收缩来源侧边栏 + 全宽阅读区 + 右栏），内嵌 Collapsible 关键词，浮动操作条，候选卡片校验改为右侧滑出面板。
 
 - **Milestone B（Phase 4 完成）**：
   最短闭环跑通：读 → 记 → 手动出卡 → 复习。建议在此节点做端到端测试。
@@ -61,14 +78,18 @@ Phase 6（复习来源回溯）  →  06-review-context-traceability.md
 - Phase 1（数据地基）：约 0.5–1 天（含迁移脚本）
 - Phase 2（后端 API）：约 1.5–2 天（Reference 解析重构 + Notes CRUD）
 - Phase 3（前端工作区）：约 3–4 天（双栏布局 + 选区交互 + 拖拽 + 底部抽屉）
+- Phase 3.1（Notebook 编辑器重构）：约 3–4 天（Tiptap 编辑器 + 右栏重构 + 拖拽集成）
+- Phase 3.2（Reference 面板重构）：约 2–3 天（三区布局 + 侧边栏 + 阅读区重构 + 校验面板滑出）
 - Phase 4（手动出卡）：约 2 天
 - Phase 5（AI 辅助出卡）：约 2–3 天
 - Phase 6（复习来源回溯）：约 1–2 天
-- **合计：约 10–14 天**
+- **合计：约 15–21 天**
 
 ### 5. 分支命名建议
 
 - Phase 1–3：`feat/workspace-reference-notebook`
+- Phase 3.1：`feat/notion-style-notebook-editor`
+- Phase 3.2：`feat/reference-panel-redesign`
 - Phase 4：`feat/manual-selection-cards`
 - Phase 5：`feat/ai-card-generation`
 - Phase 6：`feat/review-context-traceability`
