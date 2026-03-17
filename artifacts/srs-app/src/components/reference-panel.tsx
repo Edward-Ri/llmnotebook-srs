@@ -46,7 +46,6 @@ interface ReferencePanelProps {
   onToggleKeyword: (keywordId: string) => void;
   onGenerateCards: () => Promise<void>;
   onOpenValidation: () => void;
-  onSendBlockToNotebook: (block: ReferenceBlock) => Promise<void>;
   onSendSelectionToNotebook: (payload: ReferenceSelectionPayload) => Promise<void>;
 }
 
@@ -67,7 +66,6 @@ export function ReferencePanel({
   onToggleKeyword,
   onGenerateCards,
   onOpenValidation,
-  onSendBlockToNotebook,
   onSendSelectionToNotebook,
 }: ReferencePanelProps) {
   const flatOutline = flattenOutline(outline);
@@ -291,13 +289,7 @@ export function ReferencePanel({
                   onDragStart={(event) => handleDragStart(event, block)}
                   className="rounded-2xl border border-border/60 bg-card/90 p-4 transition-colors active:cursor-grabbing md:cursor-grab"
                 >
-                  <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>第 {block.positionIndex + 1} 段</span>
-                    <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2" onClick={() => onSendBlockToNotebook(block)}>
-                      <span>📋</span>
-                      送到笔记
-                    </Button>
-                  </div>
+                  <div className="mb-2 text-xs text-muted-foreground">第 {block.positionIndex + 1} 段</div>
                   <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{block.content}</p>
                 </article>
               ))}

@@ -370,27 +370,6 @@ export default function MaterialDetail() {
     }
   };
 
-  const handleSendBlockToNotebook = async (block: ReferenceBlock) => {
-    if (!ensureNotebookSelected()) return;
-    if (!selectedReferenceId) return;
-    try {
-      await createNoteBlock(selectedNotebookId as string, {
-        blockType: "quote",
-        content: block.content,
-        sourceReferenceId: selectedReferenceId,
-        sourceTextBlockId: block.id,
-      });
-      await refreshSelectedNotebook();
-      toast({ title: "已发送到 Notebook", description: `已加入第 ${block.positionIndex + 1} 段` });
-    } catch (error: any) {
-      toast({
-        title: "发送失败",
-        description: error?.message ?? "请稍后重试",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleDropReferenceBlock = async (payload: ReferenceBlockDragPayload) => {
     if (!ensureNotebookSelected()) return;
     try {
@@ -594,7 +573,6 @@ export default function MaterialDetail() {
                   onToggleKeyword={handleToggleKeyword}
                   onGenerateCards={handleGenerateCards}
                   onOpenValidation={() => setIsValidationOpen(true)}
-                  onSendBlockToNotebook={handleSendBlockToNotebook}
                   onSendSelectionToNotebook={handleSendSelectionToNotebook}
                 />
                 <NotebookPanel
@@ -643,7 +621,6 @@ export default function MaterialDetail() {
                         onToggleKeyword={handleToggleKeyword}
                         onGenerateCards={handleGenerateCards}
                         onOpenValidation={() => setIsValidationOpen(true)}
-                        onSendBlockToNotebook={handleSendBlockToNotebook}
                         onSendSelectionToNotebook={handleSendSelectionToNotebook}
                       />
                     </div>
