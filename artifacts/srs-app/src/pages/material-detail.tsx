@@ -48,6 +48,7 @@ import {
   type ReferenceBlock,
   type ReferenceBlockDragPayload,
   type ReferenceOutlineNode,
+  type ReferenceSelectionPayload,
   type WorkspaceReference,
   updateNoteBlock,
   updateNotebook,
@@ -411,6 +412,31 @@ export default function MaterialDetail() {
     }
   };
 
+  const handleSendSelectionToNotebook = async (payload: ReferenceSelectionPayload) => {
+    if (!ensureNotebookSelected()) return;
+    try {
+      await createNoteBlock(selectedNotebookId as string, {
+        blockType: "quote",
+        content: payload.text,
+        sourceReferenceId: payload.referenceId,
+        sourceTextBlockId: payload.textBlockId,
+        selectionOffset: payload.selectionOffset,
+        selectionLength: payload.selectionLength,
+      });
+      await refreshSelectedNotebook();
+      toast({
+        title: "已发送选区到 Notebook",
+        description: `已保存 ${payload.selectionLength} 个字符`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "发送失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSaveBlock = async (blockId: string, input: { content: string }) => {
     try {
       await updateNoteBlock(blockId, input);
@@ -560,6 +586,7 @@ export default function MaterialDetail() {
                   onGenerateCards={handleGenerateCards}
                   onOpenValidation={() => setIsValidationOpen(true)}
                   onSendBlockToNotebook={handleSendBlockToNotebook}
+                  onSendSelectionToNotebook={handleSendSelectionToNotebook}
                 />
                 <NotebookPanel
                   documentTitle={workspaceTitle}
@@ -608,6 +635,7 @@ export default function MaterialDetail() {
                         onGenerateCards={handleGenerateCards}
                         onOpenValidation={() => setIsValidationOpen(true)}
                         onSendBlockToNotebook={handleSendBlockToNotebook}
+                        onSendSelectionToNotebook={handleSendSelectionToNotebook}
                       />
                     </div>
                   </ResizablePanel>

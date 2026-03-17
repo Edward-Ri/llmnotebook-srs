@@ -1,11 +1,13 @@
-import type { DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { BookOpen, Sparkles, Trash2, Upload } from "lucide-react";
 import type {
   ReferenceBlock,
   ReferenceBlockDragPayload,
   ReferenceOutlineNode,
+  ReferenceSelectionPayload,
   WorkspaceReference,
 } from "@/lib/workspace-api";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -45,6 +47,7 @@ interface ReferencePanelProps {
   onGenerateCards: () => Promise<void>;
   onOpenValidation: () => void;
   onSendBlockToNotebook: (block: ReferenceBlock) => Promise<void>;
+  onSendSelectionToNotebook: (payload: ReferenceSelectionPayload) => Promise<void>;
 }
 
 export function ReferencePanel({
@@ -65,9 +68,36 @@ export function ReferencePanel({
   onGenerateCards,
   onOpenValidation,
   onSendBlockToNotebook,
+  onSendSelectionToNotebook,
 }: ReferencePanelProps) {
   const flatOutline = flattenOutline(outline);
   const selectedReference = references.find((reference) => reference.id === selectedReferenceId) ?? null;
+  const contentContainerRef = useRef<HTMLDivElement | null>(null);
+  const [selectionPayload, setSelectionPayload] = useState<ReferenceSelectionPayload | null>(null);
+  const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
+
+  const clearSelectionToolbar = () => {
+    setSelectionPayload(null);
+  };
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
+        clearSelectionToolbar();
+      }
+    };
+    const handleScroll = () => {
+      clearSelectionToolbar();
+    };
+    document.addEventListener("selectionchange", handleSelectionChange);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, []);
+
   const handleDragStart = (event: DragEvent<HTMLElement>, block: ReferenceBlock) => {
     if (!selectedReferenceId) return;
     const payload: ReferenceBlockDragPayload = {
@@ -80,6 +110,74 @@ export function ReferencePanel({
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("application/json", JSON.stringify(payload));
     event.dataTransfer.setData("text/plain", block.content);
+  };
+  const handleSelectionCapture = () => {
+    if (!selectedReferenceId || !contentContainerRef.current) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    const text = selection.toString().trim();
+    if (!text) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const startNode = range.startContainer.nodeType === Node.TEXT_NODE
+      ? range.startContainer.parentElement
+      : (range.startContainer as Element | null);
+    const endNode = range.endContainer.nodeType === Node.TEXT_NODE
+      ? range.endContainer.parentElement
+      : (range.endContainer as Element | null);
+
+    if (!startNode || !endNode) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    const startBlock = startNode.closest<HTMLElement>("[data-text-block-id]");
+    const endBlock = endNode.closest<HTMLElement>("[data-text-block-id]");
+    if (!startBlock || !endBlock || startBlock !== endBlock) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    if (!contentContainerRef.current.contains(startBlock)) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    const textBlockId = startBlock.dataset.textBlockId;
+    if (!textBlockId) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      clearSelectionToolbar();
+      return;
+    }
+
+    setSelectionPayload({
+      type: "reference-selection",
+      text,
+      referenceId: selectedReferenceId,
+      textBlockId,
+      selectionOffset: range.startOffset,
+      selectionLength: selection.toString().length,
+    });
+    setToolbarPosition({
+      top: Math.max(rect.top - 64, 12),
+      left: rect.left + rect.width / 2,
+    });
   };
 
   return (
@@ -158,7 +256,12 @@ export function ReferencePanel({
         <div className="min-h-0 rounded-3xl border border-border/60 bg-background/50">
           <div className="border-b border-border/60 px-4 py-3 text-sm font-medium">原文段落</div>
           <ScrollArea className="h-[420px] md:h-full">
-            <div className="space-y-3 p-4">
+            <div
+              ref={contentContainerRef}
+              className="space-y-3 p-4"
+              onMouseUp={handleSelectionCapture}
+              onKeyUp={handleSelectionCapture}
+            >
               {isBlocksLoading && (
                 <>
                   <Skeleton className="h-20 w-full rounded-2xl" />
@@ -178,6 +281,7 @@ export function ReferencePanel({
                   key={block.id}
                   id={`reference-block-id-${block.id}`}
                   data-position-index={block.positionIndex}
+                  data-text-block-id={block.id}
                   draggable={Boolean(selectedReferenceId)}
                   onDragStart={(event) => handleDragStart(event, block)}
                   className="rounded-2xl border border-border/60 bg-card/90 p-4 transition-colors active:cursor-grabbing md:cursor-grab"
@@ -278,6 +382,18 @@ export function ReferencePanel({
           </div>
         </div>
       </div>
+      <SelectionToolbar
+        open={Boolean(selectionPayload)}
+        top={toolbarPosition.top}
+        left={toolbarPosition.left}
+        text={selectionPayload?.text ?? ""}
+        onSend={async () => {
+          if (!selectionPayload) return;
+          await onSendSelectionToNotebook(selectionPayload);
+          clearSelectionToolbar();
+          window.getSelection()?.removeAllRanges();
+        }}
+      />
     </section>
   );
 }

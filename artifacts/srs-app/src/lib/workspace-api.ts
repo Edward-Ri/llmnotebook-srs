@@ -79,6 +79,15 @@ export type ReferenceBlockDragPayload = {
   positionIndex: number;
 };
 
+export type ReferenceSelectionPayload = {
+  type: "reference-selection";
+  text: string;
+  referenceId: string;
+  textBlockId: string;
+  selectionOffset: number;
+  selectionLength: number;
+};
+
 async function parseErrorMessage(response: Response) {
   const raw = await response.text();
   try {
