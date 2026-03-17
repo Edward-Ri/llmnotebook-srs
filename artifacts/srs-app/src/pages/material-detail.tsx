@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRoute, Link } from "wouter";
 import {
   getGetDocumentKeywordsQueryKey,
@@ -9,103 +9,95 @@ import {
   useListDocuments,
   useUpdateKeywordSelections,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BookOpen, FileText, Sparkles, Upload, Wand2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, BookOpen, PanelsTopLeft } from "lucide-react";
+import { ReferenceImportDialog } from "@/components/reference-import-dialog";
+import { ReferencePanel } from "@/components/reference-panel";
+import { NotebookPanel } from "@/components/notebook-panel";
 import { DocumentCardValidation } from "@/components/document-card-validation";
+import { Button } from "@/components/ui/button";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { authedFetch } from "@/lib/authed-fetch";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  createNoteBlock,
+  createNotebook,
+  deleteReference,
+  getNotebookBlocks,
+  getReferenceBlocks,
+  getReferenceOutline,
+  importReference,
+  listNotebooks,
+  listReferences,
+  removeNoteBlock,
+  removeNotebook,
+  reorderNoteBlocks,
+  type NoteBlock,
+  type ReferenceBlock,
+  type ReferenceOutlineNode,
+  type WorkspaceReference,
+  updateNoteBlock,
+  updateNotebook,
+} from "@/lib/workspace-api";
 
-type OutlineKeyword = {
-  id: string;
-  word: string;
-};
-
-type OutlineNode = {
-  id: string;
-  title: string;
-  startIndex: number;
-  endIndex: number;
-  children: OutlineNode[];
-  keywords: OutlineKeyword[];
-};
-
-type OutlineResponse = {
-  documentId: string;
-  toc: OutlineNode[];
-};
-
-type FlatOutlineNode = {
-  node: OutlineNode;
-  depth: number;
-};
-
-type ParagraphBlock = {
-  index: number;
-  content: string;
-};
-
-function normalizeParagraphs(text: string): ParagraphBlock[] {
-  if (!text) return [];
-  const normalized = text.replace(/\r\n?/g, "\n");
-  const lines = normalized.split("\n");
-  const blocks: ParagraphBlock[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.length < 5) continue;
-    blocks.push({ index: blocks.length, content: trimmed });
-  }
-
-  return blocks;
-}
-
-function flattenOutline(nodes: OutlineNode[], depth = 0): FlatOutlineNode[] {
-  const result: FlatOutlineNode[] = [];
-  for (const node of nodes) {
-    result.push({ node, depth });
-    if (node.children.length > 0) {
-      result.push(...flattenOutline(node.children, depth + 1));
-    }
-  }
-  return result;
-}
-
-function countOutlineKeywords(nodes: OutlineNode[]): number {
+function collectKeywordIds(nodes: ReferenceOutlineNode[]): string[] {
   const ids = new Set<string>();
-  const walk = (items: OutlineNode[]) => {
-    items.forEach((node) => {
-      node.keywords.forEach((kw) => ids.add(String(kw.id)));
-      if (node.children.length > 0) walk(node.children);
+  const walk = (items: ReferenceOutlineNode[]) => {
+    items.forEach((item) => {
+      item.keywords.forEach((keyword) => ids.add(keyword.id));
+      if (item.children.length > 0) {
+        walk(item.children);
+      }
     });
   };
   walk(nodes);
-  return ids.size;
+  return [...ids];
+}
+
+function reorderIds(ids: string[], blockId: string, direction: "up" | "down") {
+  const index = ids.findIndex((id) => id === blockId);
+  if (index < 0) return ids;
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= ids.length) return ids;
+  const next = [...ids];
+  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  return next;
 }
 
 export default function MaterialDetail() {
   const [, params] = useRoute<{ id: string }>("/materials/:id");
   const id = params?.id ?? "";
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [selectedReferenceId, setSelectedReferenceId] = useState<string | null>(null);
+  const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [draftContent, setDraftContent] = useState("");
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [outline, setOutline] = useState<OutlineNode[]>([]);
-  const [isOutlineLoading, setIsOutlineLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const validationRef = useRef<HTMLElement | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isValidationOpen, setIsValidationOpen] = useState(false);
+  const [pendingJumpSource, setPendingJumpSource] = useState<{
+    referenceId: string;
+    textBlockId: string | null;
+  } | null>(null);
 
   const {
     data: documentsData,
     isLoading: isDocsLoading,
   } = useListDocuments();
-
   const currentDocument = useMemo(() => {
     if (!documentsData || !id) return undefined;
     return documentsData.documents.find((doc) => String(doc.id) === id);
@@ -116,148 +108,329 @@ export default function MaterialDetail() {
     isLoading: isKeywordsLoading,
   } = useGetDocumentKeywords(id);
 
-  const updateKeywordsMutation = useUpdateKeywordSelections();
-  const generateCardsMutation = useGenerateCards();
-  const contentBlocks = useMemo(
-    () => normalizeParagraphs(currentDocument?.content ?? ""),
-    [currentDocument?.content],
-  );
-  const flatOutline = useMemo(() => flattenOutline(outline), [outline]);
-  const outlineKeywordCount = useMemo(() => countOutlineKeywords(outline), [outline]);
-
-  const isLoading = isDocsLoading || (id !== "" && isKeywordsLoading);
-  const hasError = !isLoading && !currentDocument;
-  const hasKeywords = (keywordsData?.keywords?.length ?? 0) > 0;
-  const hasContent = Boolean(currentDocument?.content?.trim());
-  const canGenerate = hasKeywords && hasContent;
-  const showAnalyzePanel = !canGenerate;
-
   useEffect(() => {
     if (!keywordsData?.keywords) return;
     const selected = keywordsData.keywords
-      .filter((kw) => kw.isSelected)
-      .map((kw) => String(kw.id));
+      .filter((keyword) => keyword.isSelected)
+      .map((keyword) => String(keyword.id));
     setSelectedIds(selected);
   }, [keywordsData]);
 
-  const fetchOutline = useCallback(async () => {
-    if (!id) {
-      setOutline([]);
-      return;
-    }
-    setIsOutlineLoading(true);
-    try {
-      const res = await authedFetch(`/api/documents/${id}/outline`);
-      if (!res.ok) {
-        setOutline([]);
-        return;
-      }
-      const data = (await res.json()) as OutlineResponse;
-      setOutline(Array.isArray(data?.toc) ? data.toc : []);
-    } catch {
-      setOutline([]);
-    } finally {
-      setIsOutlineLoading(false);
-    }
-  }, [id]);
+  const referencesQuery = useQuery({
+    queryKey: ["workspace", "references", id],
+    queryFn: () => listReferences(id),
+    enabled: Boolean(id),
+  });
+
+  const notebooksQuery = useQuery({
+    queryKey: ["workspace", "notebooks", id],
+    queryFn: () => listNotebooks(id),
+    enabled: Boolean(id),
+  });
 
   useEffect(() => {
-    void fetchOutline();
-  }, [fetchOutline]);
-
-  const parseErrorMessage = async (res: Response) => {
-    const raw = await res.text();
-    try {
-      const data = JSON.parse(raw);
-      if (Array.isArray(data)) {
-        return data.map((item) => item?.message).filter(Boolean).join("；") || raw;
-      }
-      return data?.message ?? data?.error ?? raw;
-    } catch {
-      return raw || "请求失败";
-    }
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setDraftContent((ev.target?.result as string) ?? "");
-    };
-    reader.readAsText(file, "utf-8");
-  }, []);
-
-  const scrollToParagraph = useCallback((paragraphIndex: number) => {
-    const anchor = document.getElementById(`para-${paragraphIndex}`);
-    anchor?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-
-  const handleAnalyze = async () => {
-    if (!id) return;
-    if (!draftContent.trim()) {
-      toast({ title: "请先粘贴或导入文本", variant: "destructive" });
+    const references = referencesQuery.data?.references ?? [];
+    if (references.length === 0) {
+      setSelectedReferenceId(null);
       return;
     }
+    if (!selectedReferenceId || !references.some((reference) => reference.id === selectedReferenceId)) {
+      setSelectedReferenceId(references[0].id);
+    }
+  }, [referencesQuery.data?.references, selectedReferenceId]);
 
-    setIsAnalyzing(true);
+  useEffect(() => {
+    const notebooks = notebooksQuery.data?.notebooks ?? [];
+    if (notebooks.length === 0) {
+      setSelectedNotebookId(null);
+      return;
+    }
+    if (!selectedNotebookId || !notebooks.some((notebook) => notebook.id === selectedNotebookId)) {
+      setSelectedNotebookId(notebooks[0].id);
+    }
+  }, [notebooksQuery.data?.notebooks, selectedNotebookId]);
+
+  const referenceOutlineQuery = useQuery({
+    queryKey: ["workspace", "reference-outline", selectedReferenceId],
+    queryFn: () => getReferenceOutline(selectedReferenceId as string),
+    enabled: Boolean(selectedReferenceId),
+  });
+
+  const referenceBlocksQuery = useQuery({
+    queryKey: ["workspace", "reference-blocks", selectedReferenceId],
+    queryFn: () => getReferenceBlocks(selectedReferenceId as string),
+    enabled: Boolean(selectedReferenceId),
+  });
+
+  const noteBlocksQuery = useQuery({
+    queryKey: ["workspace", "note-blocks", selectedNotebookId],
+    queryFn: () => getNotebookBlocks(selectedNotebookId as string),
+    enabled: Boolean(selectedNotebookId),
+  });
+
+  const updateKeywordsMutation = useUpdateKeywordSelections();
+  const generateCardsMutation = useGenerateCards();
+
+  const importReferenceMutation = useMutation({
+    mutationFn: (input: { title: string; text: string }) => importReference(id, input),
+  });
+
+  const createNotebookMutation = useMutation({
+    mutationFn: (title: string) => createNotebook(id, { title }),
+  });
+
+  const references = referencesQuery.data?.references ?? [];
+  const notebooks = notebooksQuery.data?.notebooks ?? [];
+  const outline = referenceOutlineQuery.data?.toc ?? [];
+  const blocks = referenceBlocksQuery.data?.blocks ?? [];
+  const noteBlocks = noteBlocksQuery.data?.blocks ?? [];
+  const currentReferenceKeywordIds = useMemo(() => collectKeywordIds(outline), [outline]);
+  const visibleSelectedKeywordIds = useMemo(
+    () => currentReferenceKeywordIds.filter((keywordId) => selectedIds.includes(keywordId)),
+    [currentReferenceKeywordIds, selectedIds],
+  );
+
+  const referenceTitleById = useMemo(() => {
+    return Object.fromEntries(references.map((reference) => [reference.id, reference.title]));
+  }, [references]);
+
+  const sourceMetaByBlockId = useMemo(() => {
+    const sourceBlockById = new Map(blocks.map((block) => [block.id, block]));
+    return Object.fromEntries(
+      noteBlocks.map((block) => {
+        const sourceBlock = block.sourceTextBlockId ? sourceBlockById.get(block.sourceTextBlockId) : undefined;
+        return [
+          block.id,
+          {
+            referenceTitle: block.sourceReferenceId ? referenceTitleById[block.sourceReferenceId] : undefined,
+            paragraphLabel: sourceBlock ? `第 ${sourceBlock.positionIndex + 1} 段` : undefined,
+          },
+        ];
+      }),
+    );
+  }, [blocks, noteBlocks, referenceTitleById]);
+
+  useEffect(() => {
+    if (!pendingJumpSource || pendingJumpSource.referenceId !== selectedReferenceId) return;
+    if (!pendingJumpSource.textBlockId) {
+      setPendingJumpSource(null);
+      return;
+    }
+    const element = document.getElementById(`reference-block-id-${pendingJumpSource.textBlockId}`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPendingJumpSource(null);
+  }, [pendingJumpSource, selectedReferenceId, blocks]);
+
+  const invalidateWorkspaceQueries = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDocumentKeywordsQueryKey(id) }),
+      queryClient.invalidateQueries({ queryKey: ["workspace", "references", id] }),
+      queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] }),
+      queryClient.invalidateQueries({ queryKey: getGetPendingCardsQueryKey({ documentId: id }) }),
+    ]);
+  }, [id, queryClient]);
+
+  const handleToggleKeyword = useCallback((keywordId: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(keywordId)
+        ? prev.filter((idValue) => idValue !== keywordId)
+        : [...prev, keywordId]
+    ));
+  }, []);
+
+  const handleImportReference = async (input: { title: string; text: string }) => {
     try {
-      const analyzeRes = await authedFetch("/api/documents/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId: id, text: draftContent }),
-      });
-      if (!analyzeRes.ok) {
-        throw new Error(await parseErrorMessage(analyzeRes));
-      }
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() }),
-        queryClient.invalidateQueries({
-          queryKey: getGetDocumentKeywordsQueryKey(id),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: getGetPendingCardsQueryKey({ documentId: id }),
-        }),
-      ]);
-      await fetchOutline();
-
-      toast({
-        title: "解析成功",
-        description: "现在可以选择关键词、生成候选卡片，并直接在当前页面完成校验。",
-      });
+      const result = await importReferenceMutation.mutateAsync(input);
+      await invalidateWorkspaceQueries();
+      setSelectedReferenceId(result.reference.id);
+      setIsImportOpen(false);
+      toast({ title: "Reference 已导入", description: result.reference.title });
     } catch (error: any) {
       toast({
-        title: "解析失败",
+        title: "导入失败",
         description: error?.message ?? "请稍后重试",
         variant: "destructive",
       });
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
-  const toggleKeyword = (keywordId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(keywordId)
-        ? prev.filter((idValue) => idValue !== keywordId)
-        : [...prev, keywordId],
-    );
+  const handleDeleteReference = async (reference: WorkspaceReference) => {
+    if (!window.confirm(`确认删除 Reference「${reference.title}」吗？`)) return;
+    try {
+      await deleteReference(reference.id);
+      await invalidateWorkspaceQueries();
+      if (selectedReferenceId === reference.id) {
+        setSelectedReferenceId(null);
+      }
+      toast({ title: "已删除 Reference", description: reference.title });
+    } catch (error: any) {
+      toast({
+        title: "删除失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCreateNotebook = async () => {
+    const title = window.prompt("请输入 Notebook 标题", "学习笔记");
+    if (!title?.trim()) return;
+    try {
+      const notebook = await createNotebookMutation.mutateAsync(title.trim());
+      await queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] });
+      setSelectedNotebookId(notebook.id);
+      toast({ title: "Notebook 已创建", description: notebook.title });
+    } catch (error: any) {
+      toast({
+        title: "创建失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRenameNotebook = async (notebook: { id: string; title: string }) => {
+    const title = window.prompt("请输入新的 Notebook 标题", notebook.title);
+    if (!title?.trim() || title.trim() === notebook.title) return;
+    try {
+      await updateNotebook(notebook.id, { title: title.trim() });
+      await queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] });
+      toast({ title: "Notebook 已更新", description: title.trim() });
+    } catch (error: any) {
+      toast({
+        title: "更新失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteNotebook = async (notebook: { id: string; title: string }) => {
+    if (!window.confirm(`确认删除 Notebook「${notebook.title}」吗？`)) return;
+    try {
+      await removeNotebook(notebook.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] }),
+        queryClient.invalidateQueries({ queryKey: ["workspace", "note-blocks", notebook.id] }),
+      ]);
+      if (selectedNotebookId === notebook.id) {
+        setSelectedNotebookId(null);
+      }
+      toast({ title: "Notebook 已删除", description: notebook.title });
+    } catch (error: any) {
+      toast({
+        title: "删除失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const ensureNotebookSelected = useCallback(() => {
+    if (!selectedNotebookId) {
+      toast({
+        title: "请先创建或选择 Notebook",
+        description: "右侧需要先有一个可写入的 Notebook。",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  }, [selectedNotebookId, toast]);
+
+  const refreshSelectedNotebook = useCallback(async () => {
+    if (!selectedNotebookId) return;
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["workspace", "notebooks", id] }),
+      queryClient.invalidateQueries({ queryKey: ["workspace", "note-blocks", selectedNotebookId] }),
+    ]);
+  }, [id, queryClient, selectedNotebookId]);
+
+  const handleCreateBlock = async (blockType: "text" | "heading") => {
+    if (!ensureNotebookSelected()) return;
+    try {
+      await createNoteBlock(selectedNotebookId as string, {
+        blockType,
+        content: blockType === "heading" ? "新的标题" : "新的笔记",
+      });
+      await refreshSelectedNotebook();
+    } catch (error: any) {
+      toast({
+        title: "创建笔记块失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendBlockToNotebook = async (block: ReferenceBlock) => {
+    if (!ensureNotebookSelected()) return;
+    if (!selectedReferenceId) return;
+    try {
+      await createNoteBlock(selectedNotebookId as string, {
+        blockType: "quote",
+        content: block.content,
+        sourceReferenceId: selectedReferenceId,
+        sourceTextBlockId: block.id,
+      });
+      await refreshSelectedNotebook();
+      toast({ title: "已发送到 Notebook", description: `已加入第 ${block.positionIndex + 1} 段` });
+    } catch (error: any) {
+      toast({
+        title: "发送失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveBlock = async (blockId: string, input: { content: string }) => {
+    try {
+      await updateNoteBlock(blockId, input);
+      await refreshSelectedNotebook();
+    } catch (error: any) {
+      toast({
+        title: "保存失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteBlock = async (blockId: string) => {
+    try {
+      await removeNoteBlock(blockId);
+      await refreshSelectedNotebook();
+    } catch (error: any) {
+      toast({
+        title: "删除失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMoveBlock = async (blockId: string, direction: "up" | "down") => {
+    if (!selectedNotebookId) return;
+    const nextOrder = reorderIds(noteBlocks.map((block) => block.id), blockId, direction);
+    if (nextOrder.join("|") === noteBlocks.map((block) => block.id).join("|")) return;
+    try {
+      await reorderNoteBlocks(selectedNotebookId, nextOrder);
+      await refreshSelectedNotebook();
+    } catch (error: any) {
+      toast({
+        title: "重排失败",
+        description: error?.message ?? "请稍后重试",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleGenerateCards = async () => {
-    if (!id) return;
-    if (!canGenerate) {
-      toast({
-        title: "请先完成材料解析",
-        description: "当前材料尚未生成可用关键词或原文内容为空。",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (selectedIds.length === 0) {
+    if (!id || !selectedReferenceId) return;
+    if (visibleSelectedKeywordIds.length === 0) {
       toast({ title: "请先选择关键词", variant: "destructive" });
       return;
     }
@@ -268,16 +441,14 @@ export default function MaterialDetail() {
         documentId: id,
         data: { selectedIds } as never,
       });
-      const res = await generateCardsMutation.mutateAsync({
-        data: { documentId: id, keywordIds: selectedIds } as never,
+      const result = await generateCardsMutation.mutateAsync({
+        data: { documentId: id, keywordIds: visibleSelectedKeywordIds } as never,
       });
       await queryClient.invalidateQueries({
         queryKey: getGetPendingCardsQueryKey({ documentId: id }),
       });
-      toast({ title: "生成成功", description: `已生成 ${res.total} 张候选卡片` });
-      window.requestAnimationFrame(() => {
-        validationRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      setIsValidationOpen(true);
+      toast({ title: "生成成功", description: `已生成 ${result.total} 张候选卡片` });
     } catch (error: any) {
       toast({
         title: "生成失败",
@@ -289,270 +460,181 @@ export default function MaterialDetail() {
     }
   };
 
+  const handleJumpToSource = (block: NoteBlock) => {
+    if (!block.sourceReferenceId) return;
+    setSelectedReferenceId(block.sourceReferenceId);
+    setPendingJumpSource({
+      referenceId: block.sourceReferenceId,
+      textBlockId: block.sourceTextBlockId,
+    });
+  };
+
+  const isLoading = isDocsLoading || (id !== "" && isKeywordsLoading);
+  const hasError = !isLoading && !currentDocument;
+  const workspaceTitle = currentDocument?.title ?? "工作区详情";
+
   return (
     <div className="h-full w-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Button asChild size="icon" variant="ghost" className="rounded-full">
               <Link href="/">
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
             <div>
-              <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>阅读材料 · ID {id}</span>
+              <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <PanelsTopLeft className="h-3.5 w-3.5 text-primary" />
+                <span>工作区 · ID {id}</span>
               </div>
-              <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-                {currentDocument?.title ?? "阅读材料详情"}
-              </h1>
-              <p className="mt-1 text-xs md:text-sm text-muted-foreground">
-                在当前页面完成材料解析、关键词选择、候选卡片生成与校验。
+              <h1 className="mt-1 text-xl font-semibold tracking-tight md:text-2xl">{workspaceTitle}</h1>
+              <p className="mt-1 text-xs text-muted-foreground md:text-sm">
+                左侧管理 Reference 和关键词，右侧整理 Notebook，底部完成候选卡片校验。
               </p>
             </div>
           </div>
+          <Button className="gap-1.5" onClick={() => setIsImportOpen(true)}>
+            <BookOpen className="h-4 w-4" />
+            导入新 Reference
+          </Button>
         </div>
 
         {isLoading && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <section className="lg:col-span-2 space-y-3">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-64 w-full rounded-2xl" />
-            </section>
-            <section className="space-y-4">
-              <Skeleton className="h-40 w-full rounded-2xl" />
-            </section>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Skeleton className="h-[720px] rounded-3xl" />
+            <Skeleton className="h-[720px] rounded-3xl" />
           </div>
         )}
 
         {hasError && !isLoading && (
           <div className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            找不到对应的阅读材料，可能已被删除或链接有误。
+            找不到对应的工作区，可能已被删除或链接有误。
           </div>
         )}
 
         {!isLoading && currentDocument && (
-          <div className="space-y-6">
-            {showAnalyzePanel ? (
-              <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2 rounded-2xl border border-dashed border-border/70 bg-card/70 p-4 md:p-5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <Upload className="h-3.5 w-3.5 text-primary" />
-                      <span>粘贴或导入阅读材料后开始解析</span>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground">{draftContent.length} 字</span>
-                  </div>
-
-                  <div
-                    className={[
-                      "relative mt-4 min-h-[260px] rounded-xl border bg-background transition-all duration-200",
-                      isDragOver
-                        ? "border-primary bg-primary/5 shadow-lg shadow-primary/10"
-                        : "border-border hover:border-border/80",
-                    ].join(" ")}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDragOver(true);
-                    }}
-                    onDragLeave={() => setIsDragOver(false)}
-                    onDrop={handleDrop}
-                  >
-                    <textarea
-                      className="min-h-[260px] w-full resize-none bg-transparent p-4 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
-                      placeholder={"在此粘贴你的学习材料，或将文本文件拖拽至此…\n\n支持：笔记、教材段落、文章节选、论文摘要等"}
-                      value={draftContent}
-                      onChange={(e) => setDraftContent(e.target.value)}
-                    />
-                    {isDragOver && (
-                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-primary/5">
-                        <Upload className="mb-2 h-6 w-6 text-primary" />
-                        <p className="text-xs font-medium text-primary">松开以上传文件</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center gap-1 hover:text-foreground"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        上传 .txt / .md 文件
-                      </button>
-                      <span className="text-muted-foreground/60">·</span>
-                      <span>解析后会在当前页面继续后续操作</span>
-                    </div>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".txt,.md"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          setDraftContent((ev.target?.result as string) ?? "");
-                        };
-                        reader.readAsText(file, "utf-8");
-                      }}
-                    />
-
-                    <Button
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={handleAnalyze}
-                      disabled={isAnalyzing || !draftContent.trim()}
-                    >
-                      {isAnalyzing ? (
-                        <>
-                          <Wand2 className="h-4 w-4 animate-spin" />
-                          正在解析…
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="h-4 w-4" />
-                          导入并解析
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <section className="space-y-4">
-                  <div className="rounded-2xl border border-border/60 bg-card/80 p-4">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <BookOpen className="h-3.5 w-3.5 text-primary" />
-                      <span>当前状态</span>
-                    </div>
-                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      <p>该文档还没有完成首次解析。</p>
-                      <p>解析完成后会在本页展示原文、关键词和候选卡片校验区。</p>
-                    </div>
-                  </div>
-                </section>
-              </section>
+          <>
+            {isMobile ? (
+              <div className="space-y-6">
+                <ReferencePanel
+                  references={references}
+                  selectedReferenceId={selectedReferenceId}
+                  blocks={blocks}
+                  outline={outline}
+                  selectedKeywordIds={visibleSelectedKeywordIds}
+                  isReferencesLoading={referencesQuery.isLoading}
+                  isBlocksLoading={referenceBlocksQuery.isLoading}
+                  isOutlineLoading={referenceOutlineQuery.isLoading}
+                  isGenerating={isGenerating}
+                  canGenerate={visibleSelectedKeywordIds.length > 0}
+                  onSelectReference={setSelectedReferenceId}
+                  onOpenImport={() => setIsImportOpen(true)}
+                  onDeleteReference={handleDeleteReference}
+                  onToggleKeyword={handleToggleKeyword}
+                  onGenerateCards={handleGenerateCards}
+                  onOpenValidation={() => setIsValidationOpen(true)}
+                  onSendBlockToNotebook={handleSendBlockToNotebook}
+                />
+                <NotebookPanel
+                  documentTitle={workspaceTitle}
+                  notebooks={notebooks}
+                  selectedNotebookId={selectedNotebookId}
+                  blocks={noteBlocks}
+                  references={references}
+                  sourceMetaByBlockId={sourceMetaByBlockId}
+                  isNotebooksLoading={notebooksQuery.isLoading}
+                  isBlocksLoading={noteBlocksQuery.isLoading}
+                  onSelectNotebook={setSelectedNotebookId}
+                  onCreateNotebook={handleCreateNotebook}
+                  onRenameNotebook={handleRenameNotebook}
+                  onDeleteNotebook={handleDeleteNotebook}
+                  onCreateBlock={handleCreateBlock}
+                  onSaveBlock={handleSaveBlock}
+                  onDeleteBlock={handleDeleteBlock}
+                  onMoveBlockUp={(blockId) => handleMoveBlock(blockId, "up")}
+                  onMoveBlockDown={(blockId) => handleMoveBlock(blockId, "down")}
+                  onJumpToSource={handleJumpToSource}
+                />
+              </div>
             ) : (
-              <>
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                  <section className="lg:col-span-2 space-y-3">
-                    <h2 className="text-sm font-medium text-muted-foreground">原文内容</h2>
-                    <div className="max-h-[480px] min-h-[220px] overflow-y-auto rounded-2xl border border-border/60 bg-card/80 p-4 text-sm leading-relaxed text-muted-foreground">
-                      {contentBlocks.length > 0 ? (
-                        <div className="space-y-3">
-                          {contentBlocks.map((block) => (
-                            <p key={block.index} id={`para-${block.index}`} className="scroll-mt-24">
-                              {block.content}
-                            </p>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="whitespace-pre-wrap">{currentDocument.content}</div>
-                      )}
+              <div className="h-[calc(100vh-12rem)] min-h-[720px]">
+                <ResizablePanelGroup direction="horizontal" className="rounded-3xl border border-border/60 bg-background/40">
+                  <ResizablePanel defaultSize={58} minSize={45}>
+                    <div className="h-full p-3">
+                      <ReferencePanel
+                        references={references}
+                        selectedReferenceId={selectedReferenceId}
+                        blocks={blocks}
+                        outline={outline}
+                        selectedKeywordIds={visibleSelectedKeywordIds}
+                        isReferencesLoading={referencesQuery.isLoading}
+                        isBlocksLoading={referenceBlocksQuery.isLoading}
+                        isOutlineLoading={referenceOutlineQuery.isLoading}
+                        isGenerating={isGenerating}
+                        canGenerate={visibleSelectedKeywordIds.length > 0}
+                        onSelectReference={setSelectedReferenceId}
+                        onOpenImport={() => setIsImportOpen(true)}
+                        onDeleteReference={handleDeleteReference}
+                        onToggleKeyword={handleToggleKeyword}
+                        onGenerateCards={handleGenerateCards}
+                        onOpenValidation={() => setIsValidationOpen(true)}
+                        onSendBlockToNotebook={handleSendBlockToNotebook}
+                      />
                     </div>
-                  </section>
-
-                  <section className="space-y-4">
-                    <div className="rounded-2xl border border-border/60 bg-card/80 p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                          <Sparkles className="h-3.5 w-3.5 text-primary" />
-                          <span>目录与关键词</span>
-                        </div>
-                        {(keywordsData || outlineKeywordCount > 0) && (
-                          <span className="text-[11px] text-muted-foreground">
-                            共 {Math.max(keywordsData?.keywords.length ?? 0, outlineKeywordCount)} 个关键词
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
-                        {isOutlineLoading && (
-                          <div className="space-y-2">
-                            <Skeleton className="h-6 w-full" />
-                            <Skeleton className="h-6 w-[85%]" />
-                            <Skeleton className="h-6 w-[70%]" />
-                          </div>
-                        )}
-
-                        {!isOutlineLoading && flatOutline.length === 0 && (
-                          <div className="rounded-xl border border-dashed border-border/70 bg-background/60 px-3 py-4 text-xs text-muted-foreground">
-                            暂无目录结构，先点击“导入并解析”生成目录与关键词。
-                          </div>
-                        )}
-
-                        {!isOutlineLoading && flatOutline.map(({ node, depth }) => (
-                          <div key={node.id} className="rounded-xl border border-border/60 bg-background/70 p-2.5">
-                            <button
-                              type="button"
-                              className="w-full text-left"
-                              onClick={() => scrollToParagraph(node.startIndex)}
-                            >
-                              <div
-                                className="space-y-1"
-                                style={{ paddingLeft: `${depth * 12}px` }}
-                              >
-                                <p className="text-xs font-medium text-foreground">{node.title}</p>
-                                <p className="text-[11px] text-muted-foreground">
-                                  段落 {node.startIndex + 1} - {node.endIndex + 1}
-                                </p>
-                              </div>
-                            </button>
-
-                            <div
-                              className="mt-2 flex flex-wrap gap-1.5"
-                              style={{ paddingLeft: `${depth * 12}px` }}
-                            >
-                              {node.keywords.length === 0 ? (
-                                <span className="text-[11px] text-muted-foreground/80">本节暂无关键词</span>
-                              ) : (
-                                node.keywords.map((kw) => {
-                                  const keywordId = String(kw.id);
-                                  return (
-                                    <button
-                                      key={kw.id}
-                                      type="button"
-                                      onClick={() => toggleKeyword(keywordId)}
-                                    >
-                                      <Badge
-                                        variant={selectedIds.includes(keywordId) ? "default" : "outline"}
-                                        className="text-[11px]"
-                                      >
-                                        {kw.word}
-                                      </Badge>
-                                    </button>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <Button
-                        className="mt-2 w-full"
-                        onClick={handleGenerateCards}
-                        disabled={!canGenerate || selectedIds.length === 0 || isGenerating}
-                      >
-                        {isGenerating ? "生成中..." : "生成候选卡片"}
-                      </Button>
+                  </ResizablePanel>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel defaultSize={42} minSize={32}>
+                    <div className="h-full p-3">
+                      <NotebookPanel
+                        documentTitle={workspaceTitle}
+                        notebooks={notebooks}
+                        selectedNotebookId={selectedNotebookId}
+                        blocks={noteBlocks}
+                        references={references}
+                        sourceMetaByBlockId={sourceMetaByBlockId}
+                        isNotebooksLoading={notebooksQuery.isLoading}
+                        isBlocksLoading={noteBlocksQuery.isLoading}
+                        onSelectNotebook={setSelectedNotebookId}
+                        onCreateNotebook={handleCreateNotebook}
+                        onRenameNotebook={handleRenameNotebook}
+                        onDeleteNotebook={handleDeleteNotebook}
+                        onCreateBlock={handleCreateBlock}
+                        onSaveBlock={handleSaveBlock}
+                        onDeleteBlock={handleDeleteBlock}
+                        onMoveBlockUp={(blockId) => handleMoveBlock(blockId, "up")}
+                        onMoveBlockDown={(blockId) => handleMoveBlock(blockId, "down")}
+                        onJumpToSource={handleJumpToSource}
+                      />
                     </div>
-                  </section>
-                </div>
-
-                <section ref={validationRef}>
-                  <DocumentCardValidation documentId={id} />
-                </section>
-              </>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
+
+      <ReferenceImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        onSubmit={handleImportReference}
+        isSubmitting={importReferenceMutation.isPending}
+      />
+
+      <Sheet open={isValidationOpen} onOpenChange={setIsValidationOpen}>
+        <SheetContent side="bottom" className="h-[70vh] overflow-y-auto px-4 pb-6 pt-10 md:px-6">
+          <SheetHeader>
+            <SheetTitle>候选卡片校验</SheetTitle>
+            <SheetDescription>
+              在当前工作区中集中审阅、保留、编辑并分配新生成的候选卡片。
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <DocumentCardValidation documentId={id} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
