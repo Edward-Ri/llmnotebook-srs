@@ -112,7 +112,12 @@ pnpm --filter @workspace/api-server run typecheck
 - 后端已提供：
   - Reference 管理接口
   - Notebook / Note Block 管理接口
-- 当前前端尚未完成 Phase 3 接入，仍可能依赖旧解析入口
+- 当前前端已完成 Phase 3 的最小接入：
+  - 工作区双栏
+  - Reference 导入与切换
+  - Notebook CRUD
+  - 原文拖拽 / 选区发送到 Notebook
+  - 候选卡片底部抽屉校验
 
 ### 7. 常见问题
 
@@ -134,6 +139,31 @@ pnpm --filter @workspace/api-server run typecheck
   - 材料详情页调用 `POST /api/documents/analyze`
   - 后端返回 `410`
 - 原因：
-  - 前端尚未进入 Phase 3
+  - 前端代码或缓存仍停留在旧流程
 - 处理：
   - 后续按 `docs/notes-and-flashcards/03-notebook-frontend.md` 接入新的 Reference / Notebook 流程
+
+#### 7.4 创建 Notebook 失败
+
+- 常见现象：
+  - 点击“新建 Notebook”后 toast 提示创建失败
+- 首先检查：
+  - 数据库是否执行过 `lib/db/sql/note-pages-add.sql`
+- 典型根因：
+  - `note_pages` 表不存在
+  - `documents` / `users` 相关前置表或触发器缺失
+- 处理：
+  - 按本文件第 2 节顺序执行 Phase 1 SQL
+
+#### 7.5 导入 Reference 失败
+
+- 常见现象：
+  - 导入弹窗提交后 toast 提示导入失败
+- 首先检查：
+  - 数据库是否执行过：
+    - `lib/db/sql/references-add.sql`
+    - `lib/db/sql/text-blocks-migrate-to-reference.sql`
+    - `lib/db/sql/sections-migrate-to-reference.sql`
+- 当前说明：
+  - 即使未配置 `DEEPSEEK_API_KEY`，关键词提取也会走本地回退
+  - 因此持续失败时，应优先怀疑数据库 schema 不完整，而不是 LLM 配置

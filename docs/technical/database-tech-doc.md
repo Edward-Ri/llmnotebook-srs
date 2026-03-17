@@ -240,8 +240,19 @@ Phase 1 已完成的关键迁移：
 - `text_blocks.document_id -> reference_id`
 - `sections.document_id -> reference_id`
 - 为 `flashcards` 与 `card_candidates` 增加 notes / reference 来源字段
+- 前端与后端当前都默认这些迁移已经完成，不存在运行时自动迁移
+- 若本地库未执行以下 SQL，会直接影响当前主流程：
+  - `references-add.sql`
+  - `text-blocks-migrate-to-reference.sql`
+  - `sections-migrate-to-reference.sql`
+  - `note-pages-add.sql`
+  - `note-blocks-add.sql`
 
 ### 8. 当前注意点
 
 - `card_candidates.document_id` 仍保留工作区级别归属，不改为 `reference_id`
 - 后续若进入 Phase 4 / Phase 5，`flashcards.source_note_block_id`、`flashcards.source_reference_id`、`generation_mode` 会开始被实际写入并参与来源回溯
+- 若本地仍是旧 schema，常见故障包括：
+  - `创建 Notebook 失败`
+  - `导入 Reference 失败`
+  - 典型根因是缺少 `note_pages`、`references` 表或缺少 `reference_id` 迁移列

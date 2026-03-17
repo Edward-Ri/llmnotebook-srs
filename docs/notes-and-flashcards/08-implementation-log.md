@@ -73,12 +73,62 @@
 
 - Phase 1 已完成。
 - Phase 2 已完成。
+- Phase 3 已完成最小可用前端接入。
 - 当前分支：
   - `edwardli-notes-phase1-data-foundation`
   - `edwardli-notes-phase2-backend-api`
+  - `edwardli-notes-phase3-frontend`
 
 ### 已知后续关注点
 
 - `decks.ts` 与 `documents.ts` 当前的部分统计仍主要依赖 `sourceKeywordId -> sections -> references -> documents` 链路。
 - 若后续出现仅写入 `sourceReferenceId`、不写入 `sourceKeywordId` 的卡片，相关统计可能需要增加 `sourceReferenceId` 优先的兜底逻辑。
-- 下一阶段应进入 `03-notebook-frontend.md` 的前端接入。
+- 下一阶段应进入 `04-manual-card-creation.md` 或继续补 Phase 3 交互细节。
+
+### Phase 3：前端工作区已落地
+
+- `materials/:id` 已重构为双栏工作区：
+  - 左栏：Reference 列表、导入、原文 blocks、outline、关键词选择
+  - 右栏：Notebook 列表、Note Block 编辑区
+  - 底部：候选卡片校验抽屉
+- 已新增前端本地 API 封装：
+  - `artifacts/srs-app/src/lib/workspace-api.ts`
+- 已新增组件：
+  - `reference-import-dialog.tsx`
+  - `reference-panel.tsx`
+  - `notebook-panel.tsx`
+  - `note-block-item.tsx`
+  - `selection-toolbar.tsx`
+
+### Phase 3：已实现交互
+
+- 支持导入 Reference 并切换查看
+- 支持新建 / 重命名 / 删除 Notebook
+- 支持新建 text / heading 笔记块
+- 支持编辑 / 删除 / 上移 / 下移笔记块
+- 支持整段原文发送到 Notebook
+- 支持将整段原文拖拽到 Notebook
+- 支持单段落选区后通过浮动工具栏发送到 Notebook
+- 支持 `quote` 块回跳原文来源
+
+### Phase 3：提交记录
+
+- `d558aab` `chore(frontend): add workspace api helpers`
+- `65f2cb4` `feat(frontend): add reference workspace panel`
+- `08ec8fb` `feat(frontend): add notebook panel and note block editing`
+- `2e324a0` `refactor(frontend): rebuild material detail as phase3 workspace`
+- `45fc014` `fix(frontend): update auth page mutation pending states`
+- `fa1a521` `feat(frontend): add drag and drop from references to notebook`
+- `7fc66ae` `feat(frontend): add selection toolbar for sending quotes to notebook`
+
+### Phase 3：稳定性修复
+
+- 修复工作区创建后详情页误报“找不到对应工作区”
+- 修复 generated client 未带 cookie 导致的身份不一致问题
+- 修复 Reference 导入在 LLM 不可用时整条失败的问题，改为关键词本地回退
+- Notebook 创建失败时后端已返回更具体的 `message`
+
+### Phase 3：提交记录（修复）
+
+- `87807b7` `fix(frontend): stabilize workspace creation and detail loading`
+- `e3e3d49` `fix(api): stabilize auth cookies and reference import fallback`

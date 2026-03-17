@@ -83,6 +83,7 @@ documents（工作区）
      - 叶子 section 关键词提取
   4. 写入 `text_blocks / sections / keywords`
   5. 返回 `reference + toc + keywords + tocSource`
+- 当前关键词提取在 DeepSeek 不可用时会回退到本地启发式抽取，不再整条导入失败
 
 #### 5.3 Reference 读取接口
 
@@ -122,6 +123,7 @@ documents（工作区）
   - 末尾追加
   - 指定 `insertAtIndex`
   - 指定位置后的块顺延
+- `POST /api/documents/:documentId/notebooks` 在失败时会返回更具体的 `message`，便于前端直接暴露数据库或约束错误
 
 ### 7. 现有工作区接口适配
 
@@ -183,6 +185,7 @@ flashcards -> keywords -> sections -> references -> documents
 
 - 优先 Cookie：`srs_token`
 - 无 Cookie 时支持 `Authorization: Bearer <token>`
+- `lib/api-client-react` 的 generated client 已统一补 `credentials: "include"`，避免 cookie 身份在 query 与 mutation 之间不一致
 
 ### 10. 测试与校验
 
@@ -196,6 +199,7 @@ flashcards -> keywords -> sections -> references -> documents
 
 ### 11. 当前注意点
 
-- 当前前端尚未进入 Phase 3，仍有旧页面依赖被废弃的 `POST /api/documents/analyze`
+- 前端已完成 Phase 3 的最小接入，`materials/:id` 已改为工作区双栏
+- 若数据库未执行 Phase 1 SQL，`notes.ts` 与 `references.ts` 的新接口会直接失败
 - `documents.ts` / `decks.ts` 的部分统计主要依赖 `sourceKeywordId -> sections -> references -> documents`
 - 若后续卡片只写 `sourceReferenceId`、不写 `sourceKeywordId`，建议补 `sourceReferenceId` 优先的统计兜底逻辑
