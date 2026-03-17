@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS note_blocks (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
   source_text_block_id UUID NULL REFERENCES text_blocks(id) ON DELETE SET NULL,
-  source_reference_id UUID NULL REFERENCES references(id) ON DELETE SET NULL,
+  source_reference_id UUID NULL REFERENCES "references"(id) ON DELETE SET NULL,
   content TEXT NOT NULL,
   block_type VARCHAR(32) NOT NULL DEFAULT 'text',
   position_index INT NOT NULL,

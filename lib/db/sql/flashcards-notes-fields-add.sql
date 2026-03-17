@@ -8,7 +8,7 @@ ALTER TABLE flashcards
   ADD COLUMN IF NOT EXISTS source_note_block_id UUID NULL REFERENCES note_blocks(id) ON DELETE SET NULL;
 
 ALTER TABLE flashcards
-  ADD COLUMN IF NOT EXISTS source_reference_id UUID NULL REFERENCES references(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS source_reference_id UUID NULL REFERENCES "references"(id) ON DELETE SET NULL;
 
 ALTER TABLE flashcards
   ADD COLUMN IF NOT EXISTS generation_mode VARCHAR(32) NOT NULL DEFAULT 'keyword';

@@ -29,12 +29,12 @@ BEGIN
     RAISE EXCEPTION 'Cannot migrate sections: documents.user_id contains NULL values.';
   END IF;
 
-  INSERT INTO public.references (document_id, user_id, title)
+  INSERT INTO public."references" (document_id, user_id, title)
   SELECT d.id, d.user_id, d.title
   FROM public.documents d
   WHERE NOT EXISTS (
     SELECT 1
-    FROM public.references r
+    FROM public."references" r
     WHERE r.document_id = d.id
   );
 
@@ -43,7 +43,7 @@ BEGIN
 
   UPDATE public.sections s
   SET reference_id = r.id
-  FROM public.references r
+  FROM public."references" r
   WHERE r.document_id = s.document_id;
 
   ALTER TABLE public.sections

@@ -34,20 +34,20 @@ export DEEPSEEK_API_KEY="your_api_key_here"
 首次初始化后，建议按顺序执行以下脚本：
 
 ```bash
-psql "$DATABASE_URL" -f lib/db/sql/users-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/keywords-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/decks-tree-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/flashcards-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/flashcards-sm2-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/review-logs-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/card-candidates-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/references-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/text-blocks-migrate-to-reference.sql
-psql "$DATABASE_URL" -f lib/db/sql/sections-migrate-to-reference.sql
-psql "$DATABASE_URL" -f lib/db/sql/note-pages-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/note-blocks-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/flashcards-notes-fields-add.sql
-psql "$DATABASE_URL" -f lib/db/sql/card-candidates-notes-fields-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/users-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/keywords-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/decks-tree-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/flashcards-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/flashcards-sm2-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/review-logs-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/card-candidates-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/references-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/text-blocks-migrate-to-reference.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/sections-migrate-to-reference.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/note-pages-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/note-blocks-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/flashcards-notes-fields-add.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/sql/card-candidates-notes-fields-add.sql
 ```
 
 ### 3. 启动后端
