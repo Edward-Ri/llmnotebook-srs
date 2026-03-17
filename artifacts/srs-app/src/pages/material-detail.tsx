@@ -123,12 +123,14 @@ export default function MaterialDetail() {
     queryKey: ["workspace", "references", id],
     queryFn: () => listReferences(id),
     enabled: Boolean(id),
+    retry: false,
   });
 
   const notebooksQuery = useQuery({
     queryKey: ["workspace", "notebooks", id],
     queryFn: () => listNotebooks(id),
     enabled: Boolean(id),
+    retry: false,
   });
 
   useEffect(() => {
@@ -520,8 +522,15 @@ export default function MaterialDetail() {
     });
   };
 
-  const isLoading = isDocsLoading || (id !== "" && isKeywordsLoading);
-  const hasError = !isLoading && !currentDocument;
+  const isWorkspaceMissing = Boolean(
+    id &&
+    (
+      (referencesQuery.error instanceof Error && referencesQuery.error.message.includes("DOCUMENT_NOT_FOUND")) ||
+      (notebooksQuery.error instanceof Error && notebooksQuery.error.message.includes("DOCUMENT_NOT_FOUND"))
+    ),
+  );
+  const isLoading = isDocsLoading || referencesQuery.isLoading || notebooksQuery.isLoading || (id !== "" && isKeywordsLoading);
+  const hasError = !isLoading && isWorkspaceMissing;
   const workspaceTitle = currentDocument?.title ?? "工作区详情";
 
   return (
@@ -564,7 +573,7 @@ export default function MaterialDetail() {
           </div>
         )}
 
-        {!isLoading && currentDocument && (
+        {!isLoading && !hasError && (
           <>
             {isMobile ? (
               <div className="space-y-6">
