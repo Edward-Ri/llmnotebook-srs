@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { BookOpen, Sparkles, Trash2, Upload } from "lucide-react";
+import { BookOpen, GripVertical, Sparkles, Trash2, Upload } from "lucide-react";
 import type {
   ReferenceBlock,
   ReferenceBlockDragPayload,
@@ -69,7 +69,6 @@ export function ReferencePanel({
   const selectedReference = references.find((reference) => reference.id === selectedReferenceId) ?? null;
   const contentContainerRef = useRef<HTMLDivElement | null>(null);
   const [selectionPayload, setSelectionPayload] = useState<ReferenceSelectionPayload | null>(null);
-  const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
 
   const clearSelectionToolbar = () => {
     setSelectionPayload(null);
@@ -93,9 +92,13 @@ export function ReferencePanel({
     };
   }, []);
 
-  const handleDragStart = (event: DragEvent<HTMLElement>, block: ReferenceBlock) => {
+  const handleDragStart = (
+    event: DragEvent<HTMLElement>,
+    block: ReferenceBlock,
+    mode: "selection" | "block" = "selection",
+  ) => {
     if (!selectedReferenceId || !selectedReference) return;
-    const isSelectionDrag = selectionPayload?.textBlockId === block.id;
+    const isSelectionDrag = mode === "selection" && selectionPayload?.textBlockId === block.id;
     const payload: ReferenceBlockDragPayload = {
       type: "reference-block",
       text: isSelectionDrag ? selectionPayload.text : block.content,
@@ -174,10 +177,6 @@ export function ReferencePanel({
       selectionOffset: range.startOffset,
       selectionLength: selection.toString().length,
     });
-    setToolbarPosition({
-      top: Math.max(rect.top - 64, 12),
-      left: rect.left + rect.width / 2,
-    });
   };
 
   return (
@@ -192,6 +191,9 @@ export function ReferencePanel({
             <h2 className="mt-1 text-lg font-semibold tracking-tight">原文与关键词</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               逐份切换 Reference，阅读原文、选择关键词并生成候选卡片。
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              拖动段落左侧把手可引用整段，先框选再拖动文字可仅引用片段。
             </p>
           </div>
           <Button size="sm" className="gap-1.5" onClick={onOpenImport}>
@@ -282,11 +284,22 @@ export function ReferencePanel({
                   id={`reference-block-id-${block.id}`}
                   data-position-index={block.positionIndex}
                   data-text-block-id={block.id}
-                  draggable={Boolean(selectedReferenceId)}
                   onDragStart={(event) => handleDragStart(event, block)}
-                  className="rounded-2xl border border-border/60 bg-card/90 p-4 transition-colors active:cursor-grabbing md:cursor-grab"
+                  className="rounded-2xl border border-border/60 bg-card/90 p-4 transition-colors"
                 >
-                  <div className="mb-2 text-xs text-muted-foreground">第 {block.positionIndex + 1} 段</div>
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="text-xs text-muted-foreground">第 {block.positionIndex + 1} 段</div>
+                    <button
+                      type="button"
+                      draggable={Boolean(selectedReferenceId)}
+                      onDragStart={(event) => handleDragStart(event, block, "block")}
+                      className="inline-flex h-7 w-7 shrink-0 cursor-grab items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground active:cursor-grabbing"
+                      aria-label={`拖动整段 ${block.positionIndex + 1}`}
+                      title="拖动整段到笔记"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                  </div>
                   <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">{block.content}</p>
                 </article>
               ))}
