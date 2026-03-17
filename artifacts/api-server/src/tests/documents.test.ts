@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { Paragraph } from "../utils/physicalChunking";
 import type { TOCNode } from "../utils/physicalChunking";
-import { attachKeywordsToToc } from "../utils/toc-keywords.ts";
+import { attachKeywordsToToc } from "../utils/toc-keywords";
 
 function run() {
   const paragraphs: Paragraph[] = [

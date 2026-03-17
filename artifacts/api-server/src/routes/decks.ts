@@ -5,6 +5,7 @@ import {
   documentsTable,
   flashcardsTable,
   keywordsTable,
+  referencesTable,
   reviewLogsTable,
   sectionsTable,
 } from "@workspace/db/schema";
@@ -334,7 +335,8 @@ router.get("/:deckId", requireAuth, async (req, res) => {
       .from(flashcardsTable)
       .leftJoin(keywordsTable, eq(flashcardsTable.sourceKeywordId, keywordsTable.id))
       .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-      .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+      .leftJoin(referencesTable, eq(sectionsTable.referenceId, referencesTable.id))
+      .leftJoin(documentsTable, eq(referencesTable.documentId, documentsTable.id))
       .where(eq(flashcardsTable.deckId, deckId))
       .orderBy(asc(flashcardsTable.createdAt));
 

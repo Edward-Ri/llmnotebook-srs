@@ -1,20 +1,20 @@
 import { index, integer, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { documentsTable } from "./documents";
+import { referencesTable } from "./references";
 
 export const textBlocksTable = pgTable(
   "text_blocks",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    documentId: uuid("document_id")
+    referenceId: uuid("reference_id")
       .notNull()
-      .references(() => documentsTable.id, { onDelete: "cascade" }),
+      .references(() => referencesTable.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
     positionIndex: integer("position_index").notNull(),
   },
   (t) => ({
-    documentIdIdx: index("text_blocks_document_id_idx").on(t.documentId),
-    documentIdPositionUnique: uniqueIndex("text_blocks_document_id_position_index_uq").on(
-      t.documentId,
+    referenceIdIdx: index("text_blocks_reference_id_idx").on(t.referenceId),
+    referenceIdPositionUnique: uniqueIndex("text_blocks_reference_id_position_index_uq").on(
+      t.referenceId,
       t.positionIndex,
     ),
   }),

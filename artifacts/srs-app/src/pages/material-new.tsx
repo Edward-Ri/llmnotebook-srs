@@ -52,6 +52,30 @@ export default function NewMaterialNotebook() {
         throw new Error("创建文档失败：缺少 documentId");
       }
 
+      queryClient.setQueryData(
+        getListDocumentsQueryKey(),
+        (prev: { documents?: Array<Record<string, unknown>> } | undefined) => {
+          const nextDocument = {
+            id: documentId,
+            title: created.document.title ?? normalizedTitle,
+            content: "",
+            createdAt: created.document.createdAt ?? new Date().toISOString(),
+            keywordCount: 0,
+            cardCount: 0,
+          };
+
+          const existing = prev?.documents ?? [];
+          if (existing.some((doc) => String(doc.id) === documentId)) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            documents: [nextDocument, ...existing],
+          };
+        },
+      );
+
       toast({
         title: "Notebook 已创建",
         description: "请在文档详情页粘贴或导入材料并开始解析。",

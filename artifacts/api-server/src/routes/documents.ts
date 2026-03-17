@@ -2,505 +2,31 @@ import { Router, type IRouter, type Request } from "express";
 import { db } from "@workspace/db";
 import {
   documentsTable,
-  keywordsTable,
-  textBlocksTable,
-  sectionsTable,
   flashcardsTable,
+  keywordsTable,
+  referencesTable,
+  sectionsTable,
+  textBlocksTable,
 } from "@workspace/db/schema";
+import { UpdateKeywordSelectionsBody } from "@workspace/api-zod";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
-import {
-  UpdateKeywordSelectionsBody,
-} from "@workspace/api-zod";
-import {
-  buildTocTree,
-  physicalChunk,
-  segmentSections,
-  type Paragraph,
-  type TOCNode,
-} from "../utils/physicalChunking";
-import { deepseekChat, type ChatMessage } from "../services/llm";
 import { requireAuth } from "../middlewares/auth";
-import { z } from "zod";
+import { buildTocFromStoredSections } from "../services/referenceParser";
 
 const router: IRouter = Router();
+
 const getUserId = (req: Request) => (req as Request & { user: { id: string } }).user.id;
 const getSingleParam = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
-const AnalyzeDocumentRequest = z.object({
-  documentId: z.string().uuid(),
-  text: z.string(),
-});
+async function findOwnedDocument(documentId: string, userId: string) {
+  const [doc] = await db
+    .select({ id: documentsTable.id, title: documentsTable.title })
+    .from(documentsTable)
+    .where(and(eq(documentsTable.id, documentId), eq(documentsTable.userId, userId)))
+    .limit(1);
 
-type LlmKeyword = { word: string; reason?: string; score?: number };
-type TocSource = "rule" | "llm" | "fallback";
-
-type SectionPlan = {
-  tempId: string;
-  parentTempId: string | null;
-  title: string;
-  startIndex: number;
-  endIndex: number;
-  level: number;
-};
-
-type LlmOutlineNode = {
-  title: string;
-  startIndex: number;
-  endIndex: number;
-  children?: LlmOutlineNode[];
-};
-
-const KEYWORD_STOPWORDS = new Set([
-  "的",
-  "了",
-  "和",
-  "与",
-  "及",
-  "是",
-  "在",
-  "对",
-  "及其",
-  "其中",
-  "通过",
-  "进行",
-  "以及",
-  "我们",
-  "你们",
-  "他们",
-  "this",
-  "that",
-  "these",
-  "those",
-  "with",
-  "from",
-  "into",
-  "about",
-  "using",
-  "used",
-  "use",
-  "for",
-  "and",
-  "the",
-  "a",
-  "an",
-  "of",
-  "to",
-  "in",
-  "on",
-  "by",
-  "or",
-  "as",
-  "is",
-  "are",
-  "be",
-]);
-
-function parseKeywordJson(raw: string): LlmKeyword[] {
-  const trimmed = raw.trim();
-  const start = trimmed.indexOf("[");
-  const end = trimmed.lastIndexOf("]");
-  if (start === -1 || end === -1 || end <= start) return [];
-  try {
-    const json = JSON.parse(trimmed.slice(start, end + 1));
-    return Array.isArray(json) ? json : [];
-  } catch {
-    return [];
-  }
-}
-
-function parseJsonArray(raw: string): unknown[] {
-  const trimmed = raw.trim();
-  const start = trimmed.indexOf("[");
-  const end = trimmed.lastIndexOf("]");
-  if (start === -1 || end === -1 || end <= start) return [];
-  try {
-    const json = JSON.parse(trimmed.slice(start, end + 1));
-    return Array.isArray(json) ? json : [];
-  } catch {
-    return [];
-  }
-}
-
-function normalizeKeywordWord(word: string): string {
-  return word
-    .trim()
-    .replace(/^[\s,.;:!?，。；：！？、]+/, "")
-    .replace(/[\s,.;:!?，。；：！？、]+$/, "");
-}
-
-function selectKeywords(words: string[], sectionText: string): string[] {
-  const sectionLower = sectionText.toLowerCase();
-  const uniq = new Map<string, { word: string; pos: number }>();
-
-  for (const raw of words) {
-    const normalized = normalizeKeywordWord(raw);
-    if (normalized.length < 2 || normalized.length > 30) continue;
-    if (/^\d+$/.test(normalized)) continue;
-
-    const lower = normalized.toLowerCase();
-    if (KEYWORD_STOPWORDS.has(lower)) continue;
-    if (uniq.has(lower)) continue;
-
-    const pos = sectionLower.indexOf(lower);
-    uniq.set(lower, {
-      word: normalized,
-      pos: pos === -1 ? Number.MAX_SAFE_INTEGER : pos,
-    });
-  }
-
-  return Array.from(uniq.values())
-    .sort((a, b) => a.pos - b.pos || a.word.localeCompare(b.word, "zh-CN"))
-    .slice(0, 8)
-    .map((item) => item.word);
-}
-
-function parseHeading(paragraph: string): { level: number; title: string } | null {
-  const line = paragraph.trim();
-  if (!line || line.length > 100) return null;
-
-  const markdown = line.match(/^(#{1,6})\s+(.+)$/);
-  if (markdown) {
-    return {
-      level: Math.min(4, Math.max(1, markdown[1].length)),
-      title: markdown[2].trim(),
-    };
-  }
-
-  const zhChapter = line.match(/^第([一二三四五六七八九十百千万0-9]+)(章|节|篇|部分|卷)[\s:：、.-]*(.*)$/);
-  if (zhChapter) {
-    const title = line;
-    const level = zhChapter[2] === "节" ? 2 : 1;
-    return { level, title };
-  }
-
-  const numbered = line.match(/^(\d+(?:\.\d+){0,3})[\s、.．)\]-]+(.+)$/);
-  if (numbered) {
-    const depth = numbered[1].split(".").length;
-    return {
-      level: Math.min(4, Math.max(1, depth)),
-      title: `${numbered[1]} ${numbered[2].trim()}`.trim(),
-    };
-  }
-
-  const zhOrdered = line.match(/^([一二三四五六七八九十]+)[、.．]\s*(.+)$/);
-  if (zhOrdered) {
-    return {
-      level: 2,
-      title: `${zhOrdered[1]}、${zhOrdered[2].trim()}`,
-    };
-  }
-
-  return null;
-}
-
-function buildRuleBasedSectionPlans(paragraphs: Paragraph[]): SectionPlan[] {
-  const headingHits = paragraphs
-    .map((p) => {
-      const heading = parseHeading(p.content);
-      if (!heading) return null;
-      return {
-        index: p.index,
-        level: heading.level,
-        title: heading.title,
-      };
-    })
-    .filter((item): item is { index: number; level: number; title: string } => Boolean(item));
-
-  if (headingHits.length === 0) return [];
-
-  const plans: SectionPlan[] = [];
-  const stack: { tempId: string; level: number }[] = [];
-
-  if (headingHits[0].index > 0) {
-    plans.push({
-      tempId: "rule-intro",
-      parentTempId: null,
-      title: "导言",
-      startIndex: 0,
-      endIndex: headingHits[0].index - 1,
-      level: 1,
-    });
-  }
-
-  for (let i = 0; i < headingHits.length; i += 1) {
-    const hit = headingHits[i];
-    const next = headingHits[i + 1];
-    const tempId = `rule-${i}`;
-    const endIndex = next ? next.index - 1 : paragraphs.length - 1;
-
-    while (stack.length > 0 && stack[stack.length - 1].level >= hit.level) {
-      stack.pop();
-    }
-
-    plans.push({
-      tempId,
-      parentTempId: stack.length > 0 ? stack[stack.length - 1].tempId : null,
-      title: hit.title,
-      startIndex: hit.index,
-      endIndex,
-      level: Math.min(4, Math.max(1, hit.level)),
-    });
-
-    stack.push({ tempId, level: hit.level });
-  }
-
-  return plans.filter((plan) => plan.startIndex <= plan.endIndex);
-}
-
-function normalizeLlmOutlineNodes(nodes: unknown[], maxIndex: number): LlmOutlineNode[] {
-  const normalized: LlmOutlineNode[] = [];
-
-  for (const node of nodes) {
-    if (!node || typeof node !== "object") continue;
-    const item = node as Record<string, unknown>;
-    const title = typeof item.title === "string" ? item.title.trim() : "";
-    const startIndex = Number(item.startIndex);
-    const endIndex = Number(item.endIndex);
-    if (!title || Number.isNaN(startIndex) || Number.isNaN(endIndex)) continue;
-
-    const clampedStart = Math.max(0, Math.min(maxIndex, Math.floor(startIndex)));
-    const clampedEnd = Math.max(0, Math.min(maxIndex, Math.floor(endIndex)));
-    if (clampedEnd < clampedStart) continue;
-
-    const childRaw = Array.isArray(item.children) ? item.children : [];
-    const children: LlmOutlineNode[] = [];
-    for (const child of childRaw) {
-      if (!child || typeof child !== "object") continue;
-      const c = child as Record<string, unknown>;
-      const childTitle = typeof c.title === "string" ? c.title.trim() : "";
-      const childStart = Number(c.startIndex);
-      const childEnd = Number(c.endIndex);
-      if (!childTitle || Number.isNaN(childStart) || Number.isNaN(childEnd)) continue;
-
-      const clampedChildStart = Math.max(clampedStart, Math.min(clampedEnd, Math.floor(childStart)));
-      const clampedChildEnd = Math.max(clampedStart, Math.min(clampedEnd, Math.floor(childEnd)));
-      if (clampedChildEnd < clampedChildStart) continue;
-
-      children.push({
-        title: childTitle,
-        startIndex: clampedChildStart,
-        endIndex: clampedChildEnd,
-        children: [],
-      });
-    }
-
-    children.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
-    normalized.push({
-      title,
-      startIndex: clampedStart,
-      endIndex: clampedEnd,
-      children,
-    });
-  }
-
-  normalized.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
-  return normalized;
-}
-
-async function buildLlmSectionPlans(docTitle: string, paragraphs: Paragraph[]): Promise<SectionPlan[]> {
-  const indexedBlocks = paragraphs.map((p) => `${p.index}: ${p.content.slice(0, 180)}`);
-  const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "你是文档目录规划助手。请基于段落索引生成两级目录树。" +
-        "严格返回 JSON 数组，每个节点必须包含 title,startIndex,endIndex,children。" +
-        "children 也是数组，元素同结构但 children 置为空数组。" +
-        "索引使用 0-based 且必须落在输入索引范围内。不要输出任何解释文本。",
-    },
-    {
-      role: "user",
-      content: JSON.stringify({
-        title: docTitle,
-        blocks: indexedBlocks,
-        outputExample: [
-          {
-            title: "一级目录示例",
-            startIndex: 0,
-            endIndex: 10,
-            children: [
-              { title: "二级目录示例", startIndex: 0, endIndex: 4, children: [] },
-            ],
-          },
-        ],
-      }),
-    },
-  ];
-
-  let raw = "";
-  try {
-    raw = await deepseekChat(messages, { temperature: 0.1, maxTokens: 1600 });
-  } catch {
-    return [];
-  }
-
-  const parsed = parseJsonArray(raw);
-  const normalized = normalizeLlmOutlineNodes(parsed, paragraphs.length - 1);
-  if (normalized.length === 0) return [];
-
-  const plans: SectionPlan[] = [];
-  normalized.forEach((node, i) => {
-    const topId = `llm-${i}`;
-    plans.push({
-      tempId: topId,
-      parentTempId: null,
-      title: node.title,
-      startIndex: node.startIndex,
-      endIndex: node.endIndex,
-      level: 1,
-    });
-
-    node.children?.forEach((child, childIndex) => {
-      plans.push({
-        tempId: `${topId}-${childIndex}`,
-        parentTempId: topId,
-        title: child.title,
-        startIndex: child.startIndex,
-        endIndex: child.endIndex,
-        level: 2,
-      });
-    });
-  });
-
-  return plans.filter((plan) => plan.startIndex <= plan.endIndex);
-}
-
-function buildFallbackSectionPlans(paragraphs: Paragraph[]): SectionPlan[] {
-  const sections = segmentSections(paragraphs);
-  const toc = buildTocTree(sections, paragraphs);
-
-  return toc.map((node, index) => ({
-    tempId: `fallback-${index}`,
-    parentTempId: null,
-    title: node.title,
-    startIndex: node.startIndex,
-    endIndex: node.endIndex,
-    level: 1,
-  }));
-}
-
-function getLeafSectionPlans(sections: SectionPlan[]): SectionPlan[] {
-  const parentIds = new Set(
-    sections
-      .map((section) => section.parentTempId)
-      .filter((value): value is string => Boolean(value)),
-  );
-
-  return sections.filter((section) => !parentIds.has(section.tempId));
-}
-
-function buildTocFromSectionPlans(
-  sectionPlans: SectionPlan[],
-  sectionIdByTemp: Map<string, string>,
-  keywordsBySectionId: Map<string, { id: string; word: string }[]>,
-): TOCNode[] {
-  const nodesBySectionId = new Map<string, TOCNode>();
-
-  for (const plan of sectionPlans) {
-    const id = sectionIdByTemp.get(plan.tempId);
-    if (!id) continue;
-    nodesBySectionId.set(id, {
-      id,
-      title: plan.title,
-      startIndex: plan.startIndex,
-      endIndex: plan.endIndex,
-      children: [],
-      keywords: keywordsBySectionId.get(id) ?? [],
-    });
-  }
-
-  const roots: TOCNode[] = [];
-  for (const plan of sectionPlans) {
-    const sectionId = sectionIdByTemp.get(plan.tempId);
-    if (!sectionId) continue;
-
-    const node = nodesBySectionId.get(sectionId);
-    if (!node) continue;
-
-    if (!plan.parentTempId) {
-      roots.push(node);
-      continue;
-    }
-
-    const parentId = sectionIdByTemp.get(plan.parentTempId);
-    const parentNode = parentId ? nodesBySectionId.get(parentId) : undefined;
-    if (!parentNode) {
-      roots.push(node);
-      continue;
-    }
-    parentNode.children.push(node);
-  }
-
-  const sortTree = (items: TOCNode[]) => {
-    items.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
-    items.forEach((item) => sortTree(item.children));
-  };
-  sortTree(roots);
-
-  return roots;
-}
-
-function buildTocFromStoredSections(
-  sections: Array<{
-    id: string;
-    parentSectionId: string | null;
-    heading: string | null;
-    startBlockIndex: number;
-    endBlockIndex: number;
-  }>,
-  keywords: Array<{ id: string; sectionId: string; word: string }>,
-): TOCNode[] {
-  const keywordsBySection = new Map<string, { id: string; word: string }[]>();
-  for (const kw of keywords) {
-    const list = keywordsBySection.get(kw.sectionId) ?? [];
-    list.push({ id: kw.id, word: kw.word });
-    keywordsBySection.set(kw.sectionId, list);
-  }
-
-  const nodesById = new Map<string, TOCNode>();
-  for (const section of sections) {
-    const title = section.heading?.trim()
-      ? section.heading.trim()
-      : `段落 ${section.startBlockIndex + 1}-${section.endBlockIndex + 1}`;
-
-    nodesById.set(section.id, {
-      id: section.id,
-      title,
-      startIndex: section.startBlockIndex,
-      endIndex: section.endBlockIndex,
-      children: [],
-      keywords: keywordsBySection.get(section.id) ?? [],
-    });
-  }
-
-  const roots: TOCNode[] = [];
-  for (const section of sections) {
-    const node = nodesById.get(section.id);
-    if (!node) continue;
-
-    if (!section.parentSectionId) {
-      roots.push(node);
-      continue;
-    }
-    const parent = nodesById.get(section.parentSectionId);
-    if (!parent) {
-      roots.push(node);
-      continue;
-    }
-    parent.children.push(node);
-  }
-
-  const sortTree = (items: TOCNode[]) => {
-    items.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
-    items.forEach((item) => {
-      item.keywords.sort((a, b) => a.word.localeCompare(b.word, "zh-CN"));
-      sortTree(item.children);
-    });
-  };
-  sortTree(roots);
-
-  return roots;
+  return doc ?? null;
 }
 
 router.post("/", requireAuth, async (req, res) => {
@@ -522,189 +48,11 @@ router.post("/", requireAuth, async (req, res) => {
   });
 });
 
-router.post("/analyze", requireAuth, async (req, res) => {
-  try {
-    const userId = getUserId(req);
-    const body = AnalyzeDocumentRequest.parse(req.body);
-
-    const [doc] = await db
-      .select({ id: documentsTable.id, title: documentsTable.title })
-      .from(documentsTable)
-      .where(and(eq(documentsTable.id, body.documentId), eq(documentsTable.userId, userId)))
-      .limit(1);
-
-    if (!doc) {
-      return res.status(404).json({ error: "DOCUMENT_NOT_FOUND" });
-    }
-
-    const paragraphs = physicalChunk(body.text);
-    if (paragraphs.length === 0) {
-      return res.status(400).json({ error: "EMPTY_DOCUMENT" });
-    }
-
-    let tocSource: TocSource = "rule";
-    let sectionPlans = buildRuleBasedSectionPlans(paragraphs);
-    if (sectionPlans.length === 0) {
-      const llmSections = await buildLlmSectionPlans(doc.title, paragraphs);
-      if (llmSections.length > 0) {
-        tocSource = "llm";
-        sectionPlans = llmSections;
-      } else {
-        tocSource = "fallback";
-        sectionPlans = buildFallbackSectionPlans(paragraphs);
-      }
-    }
-
-    if (sectionPlans.length === 0) {
-      return res.status(400).json({ error: "EMPTY_DOCUMENT" });
-    }
-
-    if (paragraphs.length > 0) {
-      await db.insert(textBlocksTable).values(
-        paragraphs.map((block) => ({
-          documentId: doc.id,
-          content: block.content,
-          positionIndex: block.index,
-        })),
-      );
-    }
-
-    const sectionIdByTemp = new Map<string, string>();
-    const sortedSectionPlans = [...sectionPlans].sort((a, b) =>
-      a.level - b.level ||
-      a.startIndex - b.startIndex ||
-      a.endIndex - b.endIndex
-    );
-
-    for (const section of sortedSectionPlans) {
-      const parentSectionId = section.parentTempId
-        ? sectionIdByTemp.get(section.parentTempId) ?? null
-        : null;
-      const [saved] = await db.insert(sectionsTable).values({
-        documentId: doc.id,
-        parentSectionId,
-        heading: section.title,
-        startBlockIndex: section.startIndex,
-        endBlockIndex: section.endIndex,
-        level: section.level,
-      }).returning({
-        id: sectionsTable.id,
-      });
-      if (saved?.id) {
-        sectionIdByTemp.set(section.tempId, saved.id);
-      }
-    }
-
-    const sectionKeywords: { sectionId: string; word: string }[] = [];
-    const leafSections = getLeafSectionPlans(sectionPlans);
-
-    for (const section of leafSections) {
-      const sectionBlocks = paragraphs
-        .slice(section.startIndex, section.endIndex + 1)
-        .map((block) => block.content);
-
-      const sectionId = sectionIdByTemp.get(section.tempId);
-      if (!sectionId) continue;
-
-      const messages: ChatMessage[] = [
-        {
-          role: "system",
-          content:
-            "你是知识提取专家。请根据给定标题、章节名与文本块，输出严格的 JSON 数组，" +
-            "每项包含 {\"word\":\"词汇\",\"reason\":\"提取理由\",\"score\":1-5}。" +
-            "仅输出 JSON，不要多余文本。",
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            title: doc.title,
-            sectionTitle: section.title,
-            blocks: sectionBlocks,
-          }),
-        },
-      ];
-
-      let raw: string;
-      try {
-        raw = await deepseekChat(messages, { temperature: 0.2 });
-      } catch (err: any) {
-        throw new Error(
-          `LLM_ERROR: ${err?.message ?? "DeepSeek request failed"}`,
-        );
-      }
-
-      const parsedWords = parseKeywordJson(raw)
-        .filter((item) => Number(item.score ?? 0) >= 3)
-        .map((item) => item.word)
-        .filter((word) => typeof word === "string" && word.trim().length > 0);
-
-      const refinedWords = selectKeywords(parsedWords, sectionBlocks.join("\n"));
-      for (const word of refinedWords) {
-        sectionKeywords.push({
-          sectionId,
-          word: word.trim(),
-        });
-      }
-    }
-
-    const keywordRows = sectionKeywords.length > 0
-      ? await db.insert(keywordsTable).values(
-      sectionKeywords.map((kw) => ({
-        sectionId: kw.sectionId,
-        textBlockId: null,
-        word: kw.word,
-        status: "PENDING",
-      })),
-    ).returning({
-      id: keywordsTable.id,
-      sectionId: keywordsTable.sectionId,
-      word: keywordsTable.word,
-      status: keywordsTable.status,
-    })
-      : [];
-
-    const keywordsBySectionId = new Map<string, { id: string; word: string }[]>();
-    for (const row of keywordRows) {
-      const list = keywordsBySectionId.get(row.sectionId) ?? [];
-      list.push({ id: row.id, word: row.word });
-      keywordsBySectionId.set(row.sectionId, list);
-    }
-
-    const tocWithKeywordRefs = buildTocFromSectionPlans(
-      sectionPlans,
-      sectionIdByTemp,
-      keywordsBySectionId,
-    );
-
-    return res.json({
-      documentId: doc.id,
-      title: doc.title,
-      tocSource,
-      keywords: keywordRows.map((k) => ({
-        id: k.id,
-        word: k.word,
-        isSelected: k.status === "SELECTED",
-        documentId: doc.id,
-        sectionId: k.sectionId,
-      })),
-      toc: tocWithKeywordRefs,
-    });
-  } catch (err: any) {
-    // eslint-disable-next-line no-console
-    console.error("Analyze failed:", err);
-    const message = err?.message ?? "Unknown error";
-    if (typeof message === "string" && message.startsWith("LLM_ERROR:")) {
-      res.status(502).json({
-        error: "LLM_ERROR",
-        message: message.replace("LLM_ERROR:", "").trim(),
-      });
-      return;
-    }
-    return res.status(500).json({
-      error: "ANALYZE_ERROR",
-      message,
-    });
-  }
+router.post("/analyze", requireAuth, async (_req, res) => {
+  return res.status(410).json({
+    error: "DOCUMENT_ANALYZE_DEPRECATED",
+    message: "请改用 POST /api/documents/:documentId/references",
+  });
 });
 
 router.get("/", requireAuth, async (req, res) => {
@@ -716,48 +64,87 @@ router.get("/", requireAuth, async (req, res) => {
     .orderBy(desc(documentsTable.createdAt));
 
   const docIds = docs.map((doc) => doc.id);
-  const blocks = docIds.length > 0
+  const references = docIds.length > 0
     ? await db
       .select({
-        documentId: textBlocksTable.documentId,
+        id: referencesTable.id,
+        documentId: referencesTable.documentId,
+        createdAt: referencesTable.createdAt,
+      })
+      .from(referencesTable)
+      .where(inArray(referencesTable.documentId, docIds))
+      .orderBy(asc(referencesTable.createdAt))
+    : [];
+
+  const referenceIds = references.map((reference) => reference.id);
+  const blocks = referenceIds.length > 0
+    ? await db
+      .select({
+        referenceId: textBlocksTable.referenceId,
         content: textBlocksTable.content,
         positionIndex: textBlocksTable.positionIndex,
       })
       .from(textBlocksTable)
-      .where(inArray(textBlocksTable.documentId, docIds))
-      .orderBy(asc(textBlocksTable.documentId), asc(textBlocksTable.positionIndex))
+      .where(inArray(textBlocksTable.referenceId, referenceIds))
+      .orderBy(asc(textBlocksTable.referenceId), asc(textBlocksTable.positionIndex))
     : [];
 
-  const contentByDoc = new Map<string, string>();
+  const blockContentByReferenceId = new Map<string, string>();
   for (const block of blocks) {
-    const prev = contentByDoc.get(block.documentId) ?? "";
+    const prev = blockContentByReferenceId.get(block.referenceId) ?? "";
     const next = prev.length > 0 ? `${prev}\n\n${block.content}` : block.content;
-    contentByDoc.set(block.documentId, next);
+    blockContentByReferenceId.set(block.referenceId, next);
   }
 
-  const result = await Promise.all(docs.map(async (doc) => {
-    const kwCount = await db
-      .select({ count: count() })
-      .from(keywordsTable)
-      .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-      .where(eq(sectionsTable.documentId, doc.id));
-    const cardCount = await db
-      .select({ count: count() })
+  const contentByDoc = new Map<string, string>();
+  for (const reference of references) {
+    const referenceContent = blockContentByReferenceId.get(reference.id);
+    if (!referenceContent) continue;
+    const prev = contentByDoc.get(reference.documentId) ?? "";
+    const next = prev.length > 0 ? `${prev}\n\n${referenceContent}` : referenceContent;
+    contentByDoc.set(reference.documentId, next);
+  }
+
+  const keywordCounts = docIds.length > 0
+    ? await db
+      .select({
+        documentId: referencesTable.documentId,
+        count: count(keywordsTable.id),
+      })
+      .from(referencesTable)
+      .leftJoin(sectionsTable, eq(sectionsTable.referenceId, referencesTable.id))
+      .leftJoin(keywordsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+      .where(inArray(referencesTable.documentId, docIds))
+      .groupBy(referencesTable.documentId)
+    : [];
+
+  const cardCounts = docIds.length > 0
+    ? await db
+      .select({
+        documentId: referencesTable.documentId,
+        count: count(flashcardsTable.id),
+      })
       .from(flashcardsTable)
       .leftJoin(keywordsTable, eq(flashcardsTable.sourceKeywordId, keywordsTable.id))
       .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-      .where(eq(sectionsTable.documentId, doc.id));
-    return {
+      .leftJoin(referencesTable, eq(sectionsTable.referenceId, referencesTable.id))
+      .where(inArray(referencesTable.documentId, docIds))
+      .groupBy(referencesTable.documentId)
+    : [];
+
+  const keywordCountByDocId = new Map(keywordCounts.map((row) => [row.documentId, Number(row.count ?? 0)]));
+  const cardCountByDocId = new Map(cardCounts.map((row) => [row.documentId, Number(row.count ?? 0)]));
+
+  return res.json({
+    documents: docs.map((doc) => ({
       id: doc.id,
       title: doc.title,
       content: contentByDoc.get(doc.id) ?? "",
       createdAt: doc.createdAt.toISOString(),
-      keywordCount: kwCount[0]?.count ?? 0,
-      cardCount: cardCount[0]?.count ?? 0,
-    };
-  }));
-
-  res.json({ documents: result });
+      keywordCount: keywordCountByDocId.get(doc.id) ?? 0,
+      cardCount: cardCountByDocId.get(doc.id) ?? 0,
+    })),
+  });
 });
 
 router.get("/:documentId/outline", requireAuth, async (req, res) => {
@@ -767,34 +154,38 @@ router.get("/:documentId/outline", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "DOCUMENT_ID_REQUIRED" });
   }
 
-  const [doc] = await db
-    .select({ id: documentsTable.id })
-    .from(documentsTable)
-    .where(and(eq(documentsTable.id, documentId), eq(documentsTable.userId, userId)))
-    .limit(1);
-
+  const doc = await findOwnedDocument(documentId, userId);
   if (!doc) {
     return res.status(404).json({ error: "DOCUMENT_NOT_FOUND" });
   }
 
+  const references = await db
+    .select({
+      id: referencesTable.id,
+      title: referencesTable.title,
+      createdAt: referencesTable.createdAt,
+    })
+    .from(referencesTable)
+    .where(and(eq(referencesTable.documentId, documentId), eq(referencesTable.userId, userId)))
+    .orderBy(asc(referencesTable.createdAt));
+
+  if (references.length === 0) {
+    return res.json({ documentId, toc: [] });
+  }
+
+  const referenceIds = references.map((reference) => reference.id);
   const sections = await db
     .select({
       id: sectionsTable.id,
+      referenceId: sectionsTable.referenceId,
       parentSectionId: sectionsTable.parentSectionId,
       heading: sectionsTable.heading,
       startBlockIndex: sectionsTable.startBlockIndex,
       endBlockIndex: sectionsTable.endBlockIndex,
     })
     .from(sectionsTable)
-    .where(eq(sectionsTable.documentId, documentId))
+    .where(inArray(sectionsTable.referenceId, referenceIds))
     .orderBy(asc(sectionsTable.level), asc(sectionsTable.startBlockIndex), asc(sectionsTable.endBlockIndex));
-
-  if (sections.length === 0) {
-    return res.json({
-      documentId,
-      toc: [],
-    });
-  }
 
   const sectionIds = sections.map((section) => section.id);
   const keywords = sectionIds.length > 0
@@ -809,10 +200,40 @@ router.get("/:documentId/outline", requireAuth, async (req, res) => {
       .orderBy(asc(keywordsTable.word))
     : [];
 
-  return res.json({
-    documentId,
-    toc: buildTocFromStoredSections(sections, keywords),
+  const sectionsByReferenceId = new Map<string, typeof sections>();
+  const sectionById = new Map(sections.map((section) => [section.id, section]));
+  for (const section of sections) {
+    const list = sectionsByReferenceId.get(section.referenceId) ?? [];
+    list.push(section);
+    sectionsByReferenceId.set(section.referenceId, list);
+  }
+
+  const keywordsByReferenceId = new Map<string, typeof keywords>();
+  for (const keyword of keywords) {
+    const section = sectionById.get(keyword.sectionId);
+    if (!section) continue;
+    const list = keywordsByReferenceId.get(section.referenceId) ?? [];
+    list.push(keyword);
+    keywordsByReferenceId.set(section.referenceId, list);
+  }
+
+  const toc = references.map((reference) => {
+    const children = buildTocFromStoredSections(
+      sectionsByReferenceId.get(reference.id) ?? [],
+      keywordsByReferenceId.get(reference.id) ?? [],
+    );
+    const endIndex = children.reduce((max, child) => Math.max(max, child.endIndex), 0);
+    return {
+      id: `reference:${reference.id}`,
+      title: reference.title,
+      startIndex: 0,
+      endIndex,
+      children,
+      keywords: [],
+    };
   });
+
+  return res.json({ documentId, toc });
 });
 
 router.delete("/:documentId", requireAuth, async (req, res) => {
@@ -823,12 +244,7 @@ router.delete("/:documentId", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "DOCUMENT_ID_REQUIRED" });
     }
 
-    const [doc] = await db
-      .select({ id: documentsTable.id })
-      .from(documentsTable)
-      .where(and(eq(documentsTable.id, documentId), eq(documentsTable.userId, userId)))
-      .limit(1);
-
+    const doc = await findOwnedDocument(documentId, userId);
     if (!doc) {
       return res.status(404).json({ error: "阅读材料不存在" });
     }
@@ -847,25 +263,39 @@ router.get("/:documentId/keywords", requireAuth, async (req, res) => {
   if (!documentId) {
     return res.status(400).json({ error: "DOCUMENT_ID_REQUIRED" });
   }
-  const keywords = await db
-    .select()
+
+  const doc = await findOwnedDocument(documentId, userId);
+  if (!doc) {
+    return res.status(404).json({ error: "DOCUMENT_NOT_FOUND" });
+  }
+
+  const rows = await db
+    .select({
+      id: keywordsTable.id,
+      word: keywordsTable.word,
+      status: keywordsTable.status,
+      sectionId: keywordsTable.sectionId,
+      startBlockIndex: sectionsTable.startBlockIndex,
+      documentId: referencesTable.documentId,
+    })
     .from(keywordsTable)
     .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-    .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+    .leftJoin(referencesTable, eq(sectionsTable.referenceId, referencesTable.id))
     .where(
       and(
-        eq(sectionsTable.documentId, documentId),
-        eq(documentsTable.userId, userId),
+        eq(referencesTable.documentId, documentId),
+        eq(referencesTable.userId, userId),
       ),
     )
     .orderBy(asc(sectionsTable.startBlockIndex), asc(keywordsTable.word));
+
   return res.json({
-    keywords: keywords.map((row) => ({
-      id: row.keywords.id,
-      word: row.keywords.word,
-      isSelected: row.keywords.status === "SELECTED",
-      documentId: row.sections?.documentId,
-      sectionId: row.keywords.sectionId,
+    keywords: rows.map((row) => ({
+      id: row.id,
+      word: row.word,
+      isSelected: row.status === "SELECTED",
+      documentId: row.documentId,
+      sectionId: row.sectionId,
     })),
   });
 });
@@ -876,45 +306,58 @@ router.put("/:documentId/keywords", requireAuth, async (req, res) => {
   if (!documentId) {
     return res.status(400).json({ error: "DOCUMENT_ID_REQUIRED" });
   }
+
+  const doc = await findOwnedDocument(documentId, userId);
+  if (!doc) {
+    return res.status(404).json({ error: "DOCUMENT_NOT_FOUND" });
+  }
+
   const body = UpdateKeywordSelectionsBody.parse(req.body);
-
-    const keywords = await db
-      .select({ id: keywordsTable.id })
-      .from(keywordsTable)
-      .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-      .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
-      .where(
-        and(
-          eq(sectionsTable.documentId, documentId),
-          eq(documentsTable.userId, userId),
-        ),
-      );
-
-    for (const kw of keywords) {
-      await db.update(keywordsTable)
-        .set({ status: body.selectedIds.includes(kw.id) ? "SELECTED" : "PENDING" })
-        .where(eq(keywordsTable.id, kw.id));
-    }
-
-  const updated = await db
-    .select()
+  const keywords = await db
+    .select({ id: keywordsTable.id })
     .from(keywordsTable)
     .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-    .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+    .leftJoin(referencesTable, eq(sectionsTable.referenceId, referencesTable.id))
     .where(
       and(
-        eq(sectionsTable.documentId, documentId),
-        eq(documentsTable.userId, userId),
+        eq(referencesTable.documentId, documentId),
+        eq(referencesTable.userId, userId),
+      ),
+    );
+
+  for (const keyword of keywords) {
+    await db.update(keywordsTable)
+      .set({ status: body.selectedIds.includes(keyword.id) ? "SELECTED" : "PENDING" })
+      .where(eq(keywordsTable.id, keyword.id));
+  }
+
+  const updated = await db
+    .select({
+      id: keywordsTable.id,
+      word: keywordsTable.word,
+      status: keywordsTable.status,
+      sectionId: keywordsTable.sectionId,
+      documentId: referencesTable.documentId,
+      startBlockIndex: sectionsTable.startBlockIndex,
+    })
+    .from(keywordsTable)
+    .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
+    .leftJoin(referencesTable, eq(sectionsTable.referenceId, referencesTable.id))
+    .where(
+      and(
+        eq(referencesTable.documentId, documentId),
+        eq(referencesTable.userId, userId),
       ),
     )
     .orderBy(asc(sectionsTable.startBlockIndex), asc(keywordsTable.word));
+
   return res.json({
     keywords: updated.map((row) => ({
-      id: row.keywords.id,
-      word: row.keywords.word,
-      isSelected: row.keywords.status === "SELECTED",
-      documentId: row.sections?.documentId,
-      sectionId: row.keywords.sectionId,
+      id: row.id,
+      word: row.word,
+      isSelected: row.status === "SELECTED",
+      documentId: row.documentId,
+      sectionId: row.sectionId,
     })),
   });
 });

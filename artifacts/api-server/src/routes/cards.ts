@@ -1,5 +1,4 @@
 import { Router, type IRouter, type Request } from "express";
-import { randomUUID } from "crypto";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import {
@@ -8,6 +7,7 @@ import {
   documentsTable,
   flashcardsTable,
   keywordsTable,
+  referencesTable,
   sectionsTable,
   textBlocksTable,
 } from "@workspace/db/schema";
@@ -231,12 +231,14 @@ router.post("/generate", requireAuth, async (req, res) => {
         id: keywordsTable.id,
         word: keywordsTable.word,
         sectionId: keywordsTable.sectionId,
+        referenceId: sectionsTable.referenceId,
         startBlockIndex: sectionsTable.startBlockIndex,
         endBlockIndex: sectionsTable.endBlockIndex,
       })
       .from(keywordsTable)
       .leftJoin(sectionsTable, eq(keywordsTable.sectionId, sectionsTable.id))
-      .leftJoin(documentsTable, eq(sectionsTable.documentId, documentsTable.id))
+      .leftJoin(referencesTable, eq(sectionsTable.referenceId, referencesTable.id))
+      .leftJoin(documentsTable, eq(referencesTable.documentId, documentsTable.id))
       .where(
         and(
           eq(documentsTable.id, body.documentId),
@@ -249,16 +251,32 @@ router.post("/generate", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "未找到可用关键词" });
     }
 
-    const blocks = await db
-      .select({
-        positionIndex: textBlocksTable.positionIndex,
-        content: textBlocksTable.content,
-      })
-      .from(textBlocksTable)
-      .where(eq(textBlocksTable.documentId, body.documentId))
-      .orderBy(asc(textBlocksTable.positionIndex));
+    const referenceIds = Array.from(new Set(
+      keywords
+        .map((keyword) => keyword.referenceId)
+        .filter((referenceId): referenceId is string => Boolean(referenceId)),
+    ));
+    const blocks = referenceIds.length > 0
+      ? await db
+        .select({
+          referenceId: textBlocksTable.referenceId,
+          positionIndex: textBlocksTable.positionIndex,
+          content: textBlocksTable.content,
+        })
+        .from(textBlocksTable)
+        .where(inArray(textBlocksTable.referenceId, referenceIds))
+        .orderBy(asc(textBlocksTable.referenceId), asc(textBlocksTable.positionIndex))
+      : [];
 
-    const blockContents = blocks.map((b) => b.content);
+    const blocksByReferenceId = new Map<string, { positionIndex: number; content: string }[]>();
+    for (const block of blocks) {
+      const list = blocksByReferenceId.get(block.referenceId) ?? [];
+      list.push({
+        positionIndex: block.positionIndex,
+        content: block.content,
+      });
+      blocksByReferenceId.set(block.referenceId, list);
+    }
 
     const pendingRows: {
       userId: string;
@@ -271,9 +289,12 @@ router.post("/generate", requireAuth, async (req, res) => {
     const keywordByIndex: string[] = [];
 
     for (const kw of keywords) {
+      if (!kw.referenceId) continue;
+      const blockContents = blocksByReferenceId.get(kw.referenceId) ?? [];
+      if (blockContents.length === 0) continue;
       const start = Number(kw.startBlockIndex ?? 0);
       const end = Number(kw.endBlockIndex ?? blockContents.length - 1);
-      const neighborhood = buildNeighborhoodBlocks(blocks, kw.word, start, end);
+      const neighborhood = buildNeighborhoodBlocks(blockContents, kw.word, start, end);
       const contextRaw = neighborhood.map((b) => b.content).join("\n\n");
       const context = contextRaw.length > 2000 ? contextRaw.slice(0, 2000) : contextRaw;
       const contextBlocks = neighborhood.map((b) => ({
