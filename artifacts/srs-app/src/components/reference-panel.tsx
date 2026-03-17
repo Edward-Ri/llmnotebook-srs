@@ -99,17 +99,22 @@ export function ReferencePanel({
   }, []);
 
   const handleDragStart = (event: DragEvent<HTMLElement>, block: ReferenceBlock) => {
-    if (!selectedReferenceId) return;
+    if (!selectedReferenceId || !selectedReference) return;
+    const isSelectionDrag = selectionPayload?.textBlockId === block.id;
     const payload: ReferenceBlockDragPayload = {
       type: "reference-block",
-      text: block.content,
+      text: isSelectionDrag ? selectionPayload.text : block.content,
       referenceId: selectedReferenceId,
       textBlockId: block.id,
+      referenceTitle: selectedReference.title,
+      paragraphLabel: `第 ${block.positionIndex + 1} 段`,
       positionIndex: block.positionIndex,
+      selectionOffset: isSelectionDrag ? selectionPayload.selectionOffset : null,
+      selectionLength: isSelectionDrag ? selectionPayload.selectionLength : null,
     };
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("application/json", JSON.stringify(payload));
-    event.dataTransfer.setData("text/plain", block.content);
+    event.dataTransfer.setData("text/plain", payload.text);
   };
   const handleSelectionCapture = () => {
     if (!selectedReferenceId || !contentContainerRef.current) {

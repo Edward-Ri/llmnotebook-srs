@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/react";
@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   type NotebookSummary,
+  type ReferenceBlockDragPayload,
   type TiptapDoc,
   getNotebookDoc,
   saveNotebookDoc,
@@ -160,6 +161,63 @@ function NotebookEditorSurface({
     }
   };
 
+  const handleEditorDragOver = (event: DragEvent<HTMLDivElement>) => {
+    const raw = event.dataTransfer.getData("application/json");
+    if (!raw) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleEditorDrop = (event: DragEvent<HTMLDivElement>) => {
+    const raw = event.dataTransfer.getData("application/json");
+    if (!editor || !raw) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      const payload = JSON.parse(raw) as ReferenceBlockDragPayload;
+      if (payload.type !== "reference-block") {
+        return;
+      }
+
+      const contentNode: JSONContent = {
+        type: "sourceBlockquote",
+        attrs: {
+          sourceReferenceId: payload.referenceId,
+          sourceTextBlockId: payload.textBlockId,
+          sourceReferenceTitle: payload.referenceTitle,
+          sourceParagraphLabel: payload.paragraphLabel,
+          selectionOffset: payload.selectionOffset,
+          selectionLength: payload.selectionLength,
+        },
+        content: [
+          {
+            type: "paragraph",
+            content: payload.text.length > 0
+              ? [{ type: "text", text: payload.text }]
+              : undefined,
+          },
+        ],
+      };
+
+      const coordsPosition = editor.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      });
+
+      if (coordsPosition?.pos !== undefined) {
+        editor.chain().focus().insertContentAt(coordsPosition.pos, contentNode).run();
+        return;
+      }
+
+      editor.chain().focus().insertContent(contentNode).run();
+    } catch {
+      return;
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-border/60 bg-background/60">
       <div className="border-b border-border/60 px-4 py-4">
@@ -221,7 +279,11 @@ function NotebookEditorSurface({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div className="mx-auto max-w-3xl">
+        <div
+          className="mx-auto max-w-3xl"
+          onDragOver={handleEditorDragOver}
+          onDrop={handleEditorDrop}
+        >
           {editor && <EditorBubbleMenu editor={editor} />}
           <SlashCommandMenu editor={editor} />
           <EditorContent editor={editor} />

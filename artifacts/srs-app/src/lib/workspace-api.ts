@@ -90,7 +90,11 @@ export type ReferenceBlockDragPayload = {
   text: string;
   referenceId: string;
   textBlockId: string;
+  referenceTitle: string;
+  paragraphLabel: string;
   positionIndex: number;
+  selectionOffset: number | null;
+  selectionLength: number | null;
 };
 
 export type ReferenceSelectionPayload = {
